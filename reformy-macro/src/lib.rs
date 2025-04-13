@@ -46,7 +46,7 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
             let nested_form = format_ident!("{}Form", ty_str);
 
             struct_fields.push(quote! {
-                pub #ident: #nested_form<'a>
+                pub #ident: #nested_form
             });
             field_inits.push(quote! {
                 #ident: #nested_form::new()
@@ -69,7 +69,7 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
                         .split(chunk);
 
 
-                        <#nested_form<'a> as ratatui::widgets::StatefulWidgetRef>::render_ref(
+                        <#nested_form as ratatui::widgets::StatefulWidgetRef>::render_ref(
                             &self.#ident,
                             cols[1],
                             buf,
@@ -85,7 +85,7 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
             });
         } else {
             struct_fields.push(quote! {
-                pub #ident: ::reformy_core::Filtext<'a, #ty>
+                pub #ident: ::reformy_core::Filtext< #ty>
             });
             field_inits.push(quote! {
                 #ident: ::reformy_core::Filtext::new()
@@ -124,19 +124,19 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
 
-        pub struct #form_name<'a> {
+        pub struct #form_name {
             #(#struct_fields),*,
             pub selected: usize,
         }
 
 
-    impl<'a> ratatui::widgets::WidgetRef for #form_name<'a> {
+    impl ratatui::widgets::WidgetRef for #form_name {
         fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
             StatefulWidgetRef::render_ref(self, area, buf, &mut true)
         }
     }
 
-    impl<'a> ratatui::widgets::StatefulWidgetRef for #form_name<'a> {
+    impl ratatui::widgets::StatefulWidgetRef for #form_name {
         type State = bool;
 
         fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
@@ -153,7 +153,7 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
         }
     }
 
-        impl<'a> #form_name<'a> {
+        impl #form_name {
             pub fn new() -> Self {
                 Self {
                     #(#field_inits),*,
@@ -205,7 +205,7 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
         }
 
         impl #name {
-            pub fn form<'a>() -> #form_name<'a> {
+            pub fn form() -> #form_name {
                 #form_name::new()
             }
         }

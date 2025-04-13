@@ -21,13 +21,13 @@ use ratatui::{
 };
 use tui_textarea::{Input, TextArea};
 
-pub struct Filtext<'a, T: Default + Display + FromStr> {
-    pub input: TextArea<'a>,
+pub struct Filtext<T: Default + Display + FromStr> {
+    pub input: TextArea<'static>,
     pub validate_input: bool,
     _phantom: PhantomData<T>,
 }
 
-impl<'a, T: Default + Display + FromStr> Filtext<'a, T> {
+impl<T: Default + Display + FromStr> Filtext<T> {
     pub fn new() -> Self {
         let input = T::default().to_string();
         Self {
