@@ -1,7 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use crossterm::event::{self, Event};
-use ratatui::widgets::Widget;
+use ratatui::widgets::{Paragraph, Widget};
 use reformy_macro::FormRenderable;
 use tui_textarea::TextArea;
 
@@ -25,6 +25,8 @@ impl FromStr for Email {
         }
     }
 }
+
+use ratatui::widgets::StatefulWidgetRef;
 
 #[derive(Debug, Default, FormRenderable)]
 struct User {
@@ -51,10 +53,11 @@ struct Whatever {
 fn main() {
     let mut foo = User::form();
     let mut terminal = ratatui::init();
+
     loop {
         terminal
             .draw(|f| {
-                foo.render(f, f.area(), true);
+                f.render_widget(&foo, f.area());
             })
             .unwrap();
 

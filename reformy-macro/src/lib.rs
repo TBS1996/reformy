@@ -68,7 +68,15 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
                         ])
                         .split(chunk);
 
-                    self.#ident.render(f, cols[1], self.selected == #idx);
+
+                        <#nested_form<'a> as ratatui::widgets::StatefulWidgetRef>::render_ref(
+                            &self.#ident,
+                            cols[1],
+                            buf,
+                            &mut (self.selected == #idx && *state),
+                        );
+
+
                 }
             });
 
@@ -99,15 +107,15 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
                         ])
                         .split(chunk);
 
-                    let label = if self.selected == #idx && infocus {
+                    let label = if self.selected == #idx && *state {
                         ratatui::widgets::Paragraph::new(format!("> {}", stringify!(#ident)))
                             .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
                     } else {
                         ratatui::widgets::Paragraph::new(stringify!(#ident))
                     };
 
-                    label.render(cols[0], f.buffer_mut());
-                    self.#ident.input.render(cols[1], f.buffer_mut());
+                    label.render_ref(cols[0], buf);
+                    self.#ident.input.render(cols[1], buf);
                 }
             });
             height_exprs.push(quote! { 1 });
@@ -115,10 +123,35 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     }
 
     let expanded = quote! {
+
         pub struct #form_name<'a> {
             #(#struct_fields),*,
             pub selected: usize,
         }
+
+
+    impl<'a> ratatui::widgets::WidgetRef for #form_name<'a> {
+        fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+            StatefulWidgetRef::render_ref(self, area, buf, &mut true)
+        }
+    }
+
+    impl<'a> ratatui::widgets::StatefulWidgetRef for #form_name<'a> {
+        type State = bool;
+
+        fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
+                use ratatui::layout::{Layout, Direction, Constraint};
+                use ratatui::widgets::WidgetRef;
+                use ratatui::widgets::StatefulWidgetRef;
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![#(Constraint::Length(#height_exprs)),*])
+                    .split(area);
+
+                #(#render_calls)*
+
+        }
+    }
 
         impl<'a> #form_name<'a> {
             pub fn new() -> Self {
@@ -162,18 +195,6 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
                     }
                     _ => false,
                 }
-            }
-
-
-            pub fn render(&self, f: &mut ratatui::Frame, area: ratatui::layout::Rect, infocus: bool) {
-                use ratatui::layout::{Layout, Direction, Constraint};
-
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![#(Constraint::Length(#height_exprs)),*])
-                    .split(area);
-
-                #(#render_calls)*
             }
 
             pub fn to_struct(&self) -> Option<#name> {
