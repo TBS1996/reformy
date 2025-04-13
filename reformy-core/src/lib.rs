@@ -6,7 +6,6 @@ pub trait FormRenderable {
 
 use crossterm::event::KeyCode;
 use ratatui::{
-    Frame,
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},

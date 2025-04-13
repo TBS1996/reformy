@@ -1,12 +1,6 @@
-use std::collections::HashMap;
 
-use crossterm::event::{self, Event, KeyCode};
-use ratatui::Frame;
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::text::Text;
-use ratatui::widgets::Paragraph;
+use crossterm::event::{self, Event};
 use reformy_macro::FormRenderable;
-use tui_textarea::{Input, TextArea};
 
 #[derive(Debug, Default, FormRenderable)]
 struct User {
