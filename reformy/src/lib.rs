@@ -1,6 +1,5 @@
 use proc_macro::TokenStream;
-use quote::ToTokens;
-use quote::{format_ident, quote};
+use quote::{ToTokens, format_ident, quote};
 use syn::{DeriveInput, Field, parse_macro_input};
 
 #[proc_macro_derive(FormRenderable, attributes(form))]
@@ -9,130 +8,129 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     let name = &input.ident;
     let form_name = format_ident!("{}Form", name);
 
-    let fields = match input.data {
-        syn::Data::Struct(data) => match data.fields {
-            syn::Fields::Named(fields) => fields.named,
-            _ => {
-                return syn::Error::new_spanned(name, "Only named fields supported")
-                    .to_compile_error()
-                    .into();
-            }
-        },
-        syn::Data::Enum(data_enum) => {
-            // Collect unit-only variants
-            let variants: Vec<_> = data_enum.variants.iter().collect();
+    match input.data {
+        syn::Data::Enum(data_enum) => generate_enum_form(name, &form_name, &data_enum),
+        syn::Data::Struct(data_struct) => {
+            generate_struct_form(name, &form_name, &data_struct.fields)
+        }
+        _ => syn::Error::new_spanned(name, "Only structs and unit enums are supported")
+            .to_compile_error()
+            .into(),
+    }
+}
 
-            let are_all_unit = variants
-                .iter()
-                .all(|v| matches!(v.fields, syn::Fields::Unit));
-            if !are_all_unit {
-                return syn::Error::new_spanned(name, "only dataless enums plz")
-                    .to_compile_error()
-                    .into();
-            }
+fn generate_enum_form(
+    name: &syn::Ident,
+    form_name: &syn::Ident,
+    data_enum: &syn::DataEnum,
+) -> TokenStream {
+    let variants: Vec<_> = data_enum.variants.iter().collect();
 
-            let form_name = format_ident!("{}Form", name);
-            let variant_idents: Vec<_> = variants.iter().map(|v| &v.ident).collect();
-            let display_names: Vec<_> = variant_idents.iter().map(|v| v.to_string()).collect();
-            let num_variants = variant_idents.len();
+    if !variants
+        .iter()
+        .all(|v| matches!(v.fields, syn::Fields::Unit))
+    {
+        return syn::Error::new_spanned(name, "Only unit variants are supported")
+            .to_compile_error()
+            .into();
+    }
 
-            let index_to_variant = variant_idents.iter().enumerate().map(|(i, ident)| {
-                quote! { #i => Some(#name::#ident), }
-            });
+    let variant_idents: Vec<_> = variants.iter().map(|v| &v.ident).collect();
+    let display_names: Vec<_> = variant_idents.iter().map(|v| v.to_string()).collect();
+    let num_variants = variant_idents.len();
 
-            let index_to_display = display_names.iter().enumerate().map(|(i, label)| {
-                quote! { #i => #label, }
-            });
+    let index_to_variant = variant_idents.iter().enumerate().map(|(i, ident)| {
+        quote! { #i => Some(#name::#ident), }
+    });
 
-            return quote! {
-                pub struct #form_name {
-                    selected: usize,
-                }
-                
+    let index_to_display = display_names.iter().enumerate().map(|(i, label)| {
+        quote! { #i => #label, }
+    });
 
-                impl #form_name {
-                    pub fn new() -> Self {
-                        Self { selected: 0 }
-                    }
-
-                    
-                pub fn form_height() -> u16 {
-                    1
-                }
-
-                    pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-                        use tui_textarea::Key;
-                        match input.key {
-                            Key::Left => {
-                                if self.selected > 0 {
-                                    self.selected -= 1;
-                                    return true;
-                                }
-                            }
-                            Key::Right => {
-                                if self.selected + 1 < #num_variants {
-                                    self.selected += 1;
-                                    return true;
-                                }
-                            }
-                            _ => {}
-                        }
-                        false
-                    }
-
-                    pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, infocus: bool) {
-                        use ratatui::widgets::WidgetRef;
-                        let label = match self.selected {
-                            #(#index_to_display)*
-                            _ => "???",
-                        };
-                        let text = if infocus {
-                            format!("> [{}]", label)
-                        } else {
-                            format!("  [{}]", label)
-                        };
-                        let para = ratatui::widgets::Paragraph::new(text);
-                        para.render_ref(area, buf);
-                    }
-
-                    pub fn to_struct(&self) -> Option<#name> {
-                        match self.selected {
-                            #(#index_to_variant)*
-                            _ => None,
-                        }
-                    }
-                }
-
-                
-                impl ratatui::widgets::WidgetRef for #form_name {
-                    fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
-                        StatefulWidgetRef::render_ref(self, area, buf, &mut true)
-                    }
-                }
-
-
-                impl ratatui::widgets::StatefulWidgetRef for #form_name {
-                    type State = bool;
-                    fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
-                        self.render(area, buf, *state);
-                    }
-                }
-
-                impl #name {
-                    pub fn form() -> #form_name {
-                        #form_name::new()
-                    }
-                }
-            }.into();
+    quote! {
+        pub struct #form_name {
+            selected: usize,
         }
 
+        impl #form_name {
+            pub fn new() -> Self {
+                Self { selected: 0 }
+            }
 
+            pub fn form_height() -> u16 {
+                1
+            }
 
+            pub fn input(&mut self, input: tui_textarea::Input) -> bool {
+                use tui_textarea::Key;
+                match input.key {
+                    Key::Left if self.selected > 0 => {
+                        self.selected -= 1;
+                        true
+                    }
+                    Key::Right if self.selected + 1 < #num_variants => {
+                        self.selected += 1;
+                        true
+                    }
+                    _ => false,
+                }
+            }
 
+            pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, infocus: bool) {
+                use ratatui::widgets::WidgetRef;
+                let label = match self.selected {
+                    #(#index_to_display)*
+                    _ => "???",
+                };
 
-        
+                let text = if infocus {
+                    format!("> [{}]", label)
+                } else {
+                    format!("  [{}]", label)
+                };
+
+                ratatui::widgets::Paragraph::new(text).render_ref(area, buf);
+            }
+
+            pub fn build(&self) -> Option<#name> {
+                match self.selected {
+                    #(#index_to_variant)*
+                    _ => None,
+                }
+            }
+        }
+
+        impl ratatui::widgets::WidgetRef for #form_name {
+            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+                ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
+            }
+        }
+
+        impl ratatui::widgets::StatefulWidgetRef for #form_name {
+            type State = bool;
+            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
+                self.render(area, buf, *state);
+            }
+        }
+
+        impl #name {
+            pub fn form() -> #form_name {
+                #form_name::new()
+            }
+        }
+    }
+    .into()
+}
+
+fn generate_struct_form(
+    name: &syn::Ident,
+    form_name: &syn::Ident,
+    fields: &syn::Fields,
+) -> TokenStream {
+    let named_fields = match fields {
+        syn::Fields::Named(fields) => &fields.named,
         _ => {
-            return syn::Error::new_spanned(name, "Only structs supported")
+            return syn::Error::new_spanned(name, "Only named fields supported")
                 .to_compile_error()
                 .into();
         }
@@ -143,33 +141,20 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     let mut to_struct_fields = Vec::new();
     let mut selected_matches = Vec::new();
     let mut render_calls = Vec::new();
-    let mut constraints = Vec::new();
     let mut height_exprs = Vec::new();
-    let field_len = fields.len();
 
-    for (idx, field) in fields.iter().enumerate() {
+    for (idx, field) in named_fields.iter().enumerate() {
         let ident = field.ident.as_ref().unwrap();
         let ty = &field.ty;
-        let nested = is_nested_field(field);
 
-        constraints.push(quote! { ratatui::layout::Constraint::Length(2) });
+        if is_nested_field(field) {
+            let nested_form =
+                format_ident!("{}Form", ty.to_token_stream().to_string().replace(' ', ""));
 
-        if nested {
-            let ty_str = ty.to_token_stream().to_string().replace(' ', "");
-            let nested_form = format_ident!("{}Form", ty_str);
-
-            struct_fields.push(quote! {
-                pub #ident: #nested_form
-            });
-            field_inits.push(quote! {
-                #ident: #nested_form::new()
-            });
-            to_struct_fields.push(quote! {
-                #ident: self.#ident.to_struct()?
-            });
-            selected_matches.push(quote! {
-                i if i == #idx => self.#ident.input(theinput),
-            });
+            struct_fields.push(quote! { pub #ident: #nested_form });
+            field_inits.push(quote! { #ident: #nested_form::new() });
+            to_struct_fields.push(quote! { #ident: self.#ident.build()? });
+            selected_matches.push(quote! { i if i == #idx => self.#ident.input(theinput), });
             render_calls.push(quote! {
                 {
                     let chunk = chunks[#idx];
@@ -181,34 +166,20 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
                         ])
                         .split(chunk);
 
-
-                        <#nested_form as ratatui::widgets::StatefulWidgetRef>::render_ref(
-                            &self.#ident,
-                            cols[1],
-                            buf,
-                            &mut (self.selected == #idx && *state),
-                        );
-
-
+                    ratatui::widgets::StatefulWidgetRef::render_ref(
+                        &self.#ident,
+                        cols[1],
+                        buf,
+                        &mut (self.selected == #idx && *state),
+                    );
                 }
             });
-
-            height_exprs.push(quote! {
-                #nested_form::form_height()
-            });
+            height_exprs.push(quote! { #nested_form::form_height() });
         } else {
-            struct_fields.push(quote! {
-                pub #ident: ::reformy_core::Filtext< #ty>
-            });
-            field_inits.push(quote! {
-                #ident: ::reformy_core::Filtext::new()
-            });
-            to_struct_fields.push(quote! {
-                #ident: self.#ident.value()?
-            });
-            selected_matches.push(quote! {
-                i if i == #idx => self.#ident.input(theinput),
-            });
+            struct_fields.push(quote! { pub #ident: ::reformy_core::Filtext<#ty> });
+            field_inits.push(quote! { #ident: ::reformy_core::Filtext::new() });
+            to_struct_fields.push(quote! { #ident: self.#ident.value()? });
+            selected_matches.push(quote! { i if i == #idx => self.#ident.input(theinput), });
             render_calls.push(quote! {
                 {
                     let chunk = chunks[#idx];
@@ -235,41 +206,18 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
         }
     }
 
-    let expanded = quote! {
+    let field_count = named_fields.len();
 
+    quote! {
         pub struct #form_name {
-            #(#struct_fields),*,
+            #(#struct_fields,)*
             pub selected: usize,
         }
-
-
-    impl ratatui::widgets::WidgetRef for #form_name {
-        fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
-            StatefulWidgetRef::render_ref(self, area, buf, &mut true)
-        }
-    }
-
-    impl ratatui::widgets::StatefulWidgetRef for #form_name {
-        type State = bool;
-
-        fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
-                use ratatui::layout::{Layout, Direction, Constraint};
-                use ratatui::widgets::WidgetRef;
-                use ratatui::widgets::StatefulWidgetRef;
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![#(Constraint::Length(#height_exprs)),*])
-                    .split(area);
-
-                #(#render_calls)*
-
-        }
-    }
 
         impl #form_name {
             pub fn new() -> Self {
                 Self {
-                    #(#field_inits),*,
+                    #(#field_inits,)*
                     selected: 0,
                 }
             }
@@ -290,30 +238,44 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
                 }
 
                 match input.key {
-                    tui_textarea::Key::Down => {
-                        if self.selected < #field_len - 1 {
-                            self.selected += 1;
-                            true
-                        } else {
-                            false
-                        }
+                    tui_textarea::Key::Down if self.selected < #field_count - 1 => {
+                        self.selected += 1;
+                        true
                     }
-                    tui_textarea::Key::Up => {
-                        if self.selected > 0 {
-                            self.selected -= 1;
-                            true
-                        } else {
-                            false
-                        }
+                    tui_textarea::Key::Up if self.selected > 0 => {
+                        self.selected -= 1;
+                        true
                     }
                     _ => false,
                 }
             }
 
-            pub fn to_struct(&self) -> Option<#name> {
+            pub fn build(&self) -> Option<#name> {
                 Some(#name {
-                    #(#to_struct_fields),*
+                    #(#to_struct_fields,)*
                 })
+            }
+        }
+
+        impl ratatui::widgets::WidgetRef for #form_name {
+            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+                ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
+            }
+        }
+
+        impl ratatui::widgets::StatefulWidgetRef for #form_name {
+            type State = bool;
+
+            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
+                use ratatui::layout::{Layout, Direction, Constraint};
+                use ratatui::widgets::WidgetRef;
+
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![#(Constraint::Length(#height_exprs)),*])
+                    .split(area);
+
+                #(#render_calls)*
             }
         }
 
@@ -322,9 +284,8 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
                 #form_name::new()
             }
         }
-    };
-
-    TokenStream::from(expanded)
+    }
+    .into()
 }
 
 fn is_nested_field(field: &Field) -> bool {

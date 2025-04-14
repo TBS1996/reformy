@@ -85,5 +85,5 @@ fn main() {
     }
 
     ratatui::restore();
-    dbg!(foo.to_struct());
+    dbg!(foo.build());
 }
