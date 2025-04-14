@@ -18,6 +18,119 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
                     .into();
             }
         },
+        syn::Data::Enum(data_enum) => {
+            // Collect unit-only variants
+            let variants: Vec<_> = data_enum.variants.iter().collect();
+
+            let are_all_unit = variants
+                .iter()
+                .all(|v| matches!(v.fields, syn::Fields::Unit));
+            if !are_all_unit {
+                return syn::Error::new_spanned(name, "only dataless enums plz")
+                    .to_compile_error()
+                    .into();
+            }
+
+            let form_name = format_ident!("{}Form", name);
+            let variant_idents: Vec<_> = variants.iter().map(|v| &v.ident).collect();
+            let display_names: Vec<_> = variant_idents.iter().map(|v| v.to_string()).collect();
+            let num_variants = variant_idents.len();
+
+            let index_to_variant = variant_idents.iter().enumerate().map(|(i, ident)| {
+                quote! { #i => Some(#name::#ident), }
+            });
+
+            let index_to_display = display_names.iter().enumerate().map(|(i, label)| {
+                quote! { #i => #label, }
+            });
+
+            return quote! {
+                pub struct #form_name {
+                    selected: usize,
+                }
+                
+
+                impl #form_name {
+                    pub fn new() -> Self {
+                        Self { selected: 0 }
+                    }
+
+                    
+                pub fn form_height() -> u16 {
+                    1
+                }
+
+                    pub fn input(&mut self, input: tui_textarea::Input) -> bool {
+                        use tui_textarea::Key;
+                        match input.key {
+                            Key::Left => {
+                                if self.selected > 0 {
+                                    self.selected -= 1;
+                                    return true;
+                                }
+                            }
+                            Key::Right => {
+                                if self.selected + 1 < #num_variants {
+                                    self.selected += 1;
+                                    return true;
+                                }
+                            }
+                            _ => {}
+                        }
+                        false
+                    }
+
+                    pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, infocus: bool) {
+                        use ratatui::widgets::WidgetRef;
+                        let label = match self.selected {
+                            #(#index_to_display)*
+                            _ => "???",
+                        };
+                        let text = if infocus {
+                            format!("> [{}]", label)
+                        } else {
+                            format!("  [{}]", label)
+                        };
+                        let para = ratatui::widgets::Paragraph::new(text);
+                        para.render_ref(area, buf);
+                    }
+
+                    pub fn to_struct(&self) -> Option<#name> {
+                        match self.selected {
+                            #(#index_to_variant)*
+                            _ => None,
+                        }
+                    }
+                }
+
+                
+                impl ratatui::widgets::WidgetRef for #form_name {
+                    fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+                        StatefulWidgetRef::render_ref(self, area, buf, &mut true)
+                    }
+                }
+
+
+                impl ratatui::widgets::StatefulWidgetRef for #form_name {
+                    type State = bool;
+                    fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
+                        self.render(area, buf, *state);
+                    }
+                }
+
+                impl #name {
+                    pub fn form() -> #form_name {
+                        #form_name::new()
+                    }
+                }
+            }.into();
+        }
+
+
+
+
+
+        
         _ => {
             return syn::Error::new_spanned(name, "Only structs supported")
                 .to_compile_error()

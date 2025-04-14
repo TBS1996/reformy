@@ -32,6 +32,8 @@ use ratatui::widgets::StatefulWidgetRef;
 struct User {
     name: String,
     age: usize,
+    #[form(nested)]
+    role: Role,
     email: Email,
     #[form(nested)]
     address: Address,
@@ -48,6 +50,14 @@ struct Address {
 #[derive(Debug, Default, FormRenderable)]
 struct Whatever {
     foo: String,
+}
+
+#[derive(Debug, Default, FormRenderable)]
+enum Role {
+    Admin,
+    Guest,
+    #[default]
+    User,
 }
 
 fn main() {
