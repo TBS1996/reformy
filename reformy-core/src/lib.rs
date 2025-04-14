@@ -1,18 +1,9 @@
 use std::{
     fmt::Display,
     marker::PhantomData,
-    ops::{Deref, DerefMut},
     str::FromStr,
 };
 
-use crossterm::event::KeyCode;
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    text::Line,
-    widgets::{Paragraph, Widget, WidgetRef},
-};
 use tui_textarea::{Input, TextArea};
 
 pub struct Filtext<T: Default + Display + FromStr> {
