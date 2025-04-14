@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-reformy-macro = { path = "../reformy-macro" }
+reformy = { path = "../reformy" }
 reformy-core = { path = "../reformy-core" }
 ratatui.workspace = true
 crossterm.workspace = true

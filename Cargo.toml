@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "reformy-macro",
+    "reformy",
     "reformy-app"
 , "reformy-core"]
 

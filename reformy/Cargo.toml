@@ -1,7 +1,9 @@
 [package]
-name = "reformy-macro"
+name = "reformy"
 version = "0.1.0"
 edition = "2024"
+description = "Derive ratatui form widgets from structs or enums"
+license = "GPL-3.0-or-later"
 
 [lib]
 proc-macro = true

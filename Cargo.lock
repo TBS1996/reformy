@@ -333,13 +333,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "reformy"
+version = "0.1.0"
+dependencies = [
+ "crossterm",
+ "proc-macro2",
+ "quote",
+ "ratatui",
+ "syn",
+ "tui-textarea",
+]
+
+[[package]]
 name = "reformy-app"
 version = "0.1.0"
 dependencies = [
  "crossterm",
  "ratatui",
+ "reformy",
  "reformy-core",
- "reformy-macro",
  "tui-textarea",
 ]
 
@@ -349,18 +361,6 @@ version = "0.1.0"
 dependencies = [
  "crossterm",
  "ratatui",
- "tui-textarea",
-]
-
-[[package]]
-name = "reformy-macro"
-version = "0.1.0"
-dependencies = [
- "crossterm",
- "proc-macro2",
- "quote",
- "ratatui",
- "syn",
  "tui-textarea",
 ]
 

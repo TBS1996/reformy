@@ -2,6 +2,8 @@
 name = "reformy-core"
 version = "0.1.0"
 edition = "2024"
+description = "helper for 'reformy' crate"
+license = "GPL-3.0-or-later"
 
 [dependencies]
 tui-textarea.workspace = true

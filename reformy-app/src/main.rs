@@ -2,7 +2,7 @@ use std::{fmt::Display, str::FromStr};
 
 use crossterm::event::{self, Event};
 use ratatui::widgets::{Paragraph, Widget};
-use reformy_macro::FormRenderable;
+use reformy::FormRenderable;
 use tui_textarea::TextArea;
 
 #[derive(Debug, Default)]
