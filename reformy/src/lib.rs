@@ -58,7 +58,7 @@ fn generate_enum_form(
             }
 
             pub fn form_height() -> u16 {
-                1
+                2
             }
 
             pub fn input(&mut self, input: tui_textarea::Input) -> bool {
@@ -84,9 +84,9 @@ fn generate_enum_form(
                 };
 
                 let text = if infocus {
-                    format!("> [{}]", label)
+                    format!(">[{}]", label)
                 } else {
-                    format!("  [{}]", label)
+                    format!("[{}]", label)
                 };
 
                 ratatui::widgets::Paragraph::new(text).render_ref(area, buf);
@@ -109,7 +109,19 @@ fn generate_enum_form(
         impl ratatui::widgets::StatefulWidgetRef for #form_name {
             type State = bool;
             fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
-                self.render(area, buf, *state);
+                use ratatui::layout::{Layout, Direction, Constraint};
+                use ratatui::widgets::WidgetRef;
+
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![Constraint::Length(1), Constraint::Length(1)])
+                    .split(area);
+
+                    let title = ratatui::widgets::Paragraph::new(stringify!(#name).to_string() + ":")
+    .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
+title.render_ref(chunks[0], buf);
+                                
+                self.render(chunks[1], buf, *state);
             }
         }
 
@@ -157,7 +169,7 @@ fn generate_struct_form(
             selected_matches.push(quote! { i if i == #idx => self.#ident.input(theinput), });
             render_calls.push(quote! {
                 {
-                    let chunk = chunks[#idx];
+                    let chunk = chunks[#idx + 1];
                     let cols = ratatui::layout::Layout::default()
                         .direction(ratatui::layout::Direction::Horizontal)
                         .constraints([
@@ -182,7 +194,7 @@ fn generate_struct_form(
             selected_matches.push(quote! { i if i == #idx => self.#ident.input(theinput), });
             render_calls.push(quote! {
                 {
-                    let chunk = chunks[#idx];
+                    let chunk = chunks[#idx + 1];
                     let cols = ratatui::layout::Layout::default()
                         .direction(ratatui::layout::Direction::Horizontal)
                         .constraints([
@@ -223,7 +235,7 @@ fn generate_struct_form(
             }
 
             pub fn form_height() -> u16 {
-                0 #( + #height_exprs )*
+                0 #( + #height_exprs )* + 1
             }
 
             pub fn input(&mut self, input: tui_textarea::Input) -> bool {
@@ -272,8 +284,12 @@ fn generate_struct_form(
 
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints(vec![#(Constraint::Length(#height_exprs)),*])
+                    .constraints(vec![Constraint::Length(1), #(Constraint::Length(#height_exprs)),*])
                     .split(area);
+
+                let title = ratatui::widgets::Paragraph::new(stringify!(#name).to_string() + ":")
+    .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
+                title.render_ref(chunks[0], buf);
 
                 #(#render_calls)*
             }

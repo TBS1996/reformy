@@ -1,6 +1,6 @@
 [package]
 name = "reformy"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Derive ratatui form widgets from structs or enums"
 license = "GPL-3.0-or-later"
