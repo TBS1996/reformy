@@ -9,3 +9,12 @@ reformy-core = { path = "../reformy-core" }
 ratatui.workspace = true
 crossterm.workspace = true
 tui-textarea.workspace = true
+
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
+
+[[bin]]
+name = "exp"
+path = "src/exp.rs"

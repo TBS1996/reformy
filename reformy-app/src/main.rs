@@ -54,7 +54,11 @@ struct Whatever {
 #[derive(Debug, Default, FormRenderable)]
 enum Role {
     Admin,
-    Guest,
+    Guest {
+        name: String,
+        cool: String,
+        whatever: String,
+    },
     #[default]
     User,
 }
