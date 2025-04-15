@@ -664,6 +664,7 @@ impl ::core::default::Default for Role {
     }
 }
 pub struct RoleGuestForm {
+    pub selected: usize,
     pub name: ::reformy_core::Filtext<String>,
     pub cool: ::reformy_core::Filtext<String>,
     pub whatever: ::reformy_core::Filtext<String>,
@@ -671,6 +672,7 @@ pub struct RoleGuestForm {
 impl RoleGuestForm {
     pub fn new() -> Self {
         Self {
+            selected: 0,
             name: ::reformy_core::Filtext::new(),
             cool: ::reformy_core::Filtext::new(),
             whatever: ::reformy_core::Filtext::new(),
@@ -684,16 +686,32 @@ impl RoleGuestForm {
         })
     }
     pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-        let mut handled = false;
-        handled |= self.name.input(input.clone());
-        handled |= self.cool.input(input.clone());
-        handled |= self.whatever.input(input.clone());
-        handled
+        let handled = match self.selected {
+            i if i == 0usize => self.name.input(input.clone()),
+            i if i == 1usize => self.cool.input(input.clone()),
+            i if i == 2usize => self.whatever.input(input.clone()),
+            _ => false,
+        };
+        if handled {
+            return true;
+        }
+        match input.key {
+            tui_textarea::Key::Down if self.selected < 3usize - 1 => {
+                self.selected += 1;
+                true
+            }
+            tui_textarea::Key::Up if self.selected > 0 => {
+                self.selected -= 1;
+                true
+            }
+            _ => false,
+        }
     }
     pub fn render(
         &self,
         area: ratatui::layout::Rect,
         buf: &mut ratatui::buffer::Buffer,
+        state: &mut bool,
     ) {
         use ratatui::widgets::WidgetRef;
         use ratatui::prelude::Constraint;
@@ -717,8 +735,23 @@ impl RoleGuestForm {
                     ratatui::layout::Constraint::Length(12),
                     ratatui::layout::Constraint::Min(0),
                 ])
-                .split(chunks[idx]);
-            let label = ratatui::widgets::Paragraph::new("name");
+                .split(chunks[0usize]);
+            let label = if self.selected == 0usize && *state {
+                ratatui::widgets::Paragraph::new(
+                        ::alloc::__export::must_use({
+                            let res = ::alloc::fmt::format(
+                                format_args!("> {0}", "name"),
+                            );
+                            res
+                        }),
+                    )
+                    .style(
+                        ratatui::style::Style::default()
+                            .fg(ratatui::style::Color::Yellow),
+                    )
+            } else {
+                ratatui::widgets::Paragraph::new("name")
+            };
             label.render_ref(cols[0], buf);
             self.name.input.render(cols[1], buf);
         }
@@ -729,8 +762,23 @@ impl RoleGuestForm {
                     ratatui::layout::Constraint::Length(12),
                     ratatui::layout::Constraint::Min(0),
                 ])
-                .split(chunks[idx]);
-            let label = ratatui::widgets::Paragraph::new("cool");
+                .split(chunks[1usize]);
+            let label = if self.selected == 1usize && *state {
+                ratatui::widgets::Paragraph::new(
+                        ::alloc::__export::must_use({
+                            let res = ::alloc::fmt::format(
+                                format_args!("> {0}", "cool"),
+                            );
+                            res
+                        }),
+                    )
+                    .style(
+                        ratatui::style::Style::default()
+                            .fg(ratatui::style::Color::Yellow),
+                    )
+            } else {
+                ratatui::widgets::Paragraph::new("cool")
+            };
             label.render_ref(cols[0], buf);
             self.cool.input.render(cols[1], buf);
         }
@@ -741,15 +789,30 @@ impl RoleGuestForm {
                     ratatui::layout::Constraint::Length(12),
                     ratatui::layout::Constraint::Min(0),
                 ])
-                .split(chunks[idx]);
-            let label = ratatui::widgets::Paragraph::new("whatever");
+                .split(chunks[2usize]);
+            let label = if self.selected == 2usize && *state {
+                ratatui::widgets::Paragraph::new(
+                        ::alloc::__export::must_use({
+                            let res = ::alloc::fmt::format(
+                                format_args!("> {0}", "whatever"),
+                            );
+                            res
+                        }),
+                    )
+                    .style(
+                        ratatui::style::Style::default()
+                            .fg(ratatui::style::Color::Yellow),
+                    )
+            } else {
+                ratatui::widgets::Paragraph::new("whatever")
+            };
             label.render_ref(cols[0], buf);
             self.whatever.input.render(cols[1], buf);
         }
     }
 }
 pub struct RoleForm {
-    pub selected: usize,
+    pub selected_variant: usize,
     pub admin: (),
     pub guest: RoleGuestForm,
     pub user: (),
@@ -757,14 +820,14 @@ pub struct RoleForm {
 impl RoleForm {
     pub fn new() -> Self {
         Self {
-            selected: 0,
+            selected_variant: 0,
             admin: (),
             guest: RoleGuestForm::new(),
             user: (),
         }
     }
     pub fn form_height(&self) -> u16 {
-        let index = self.selected;
+        let index = self.selected_variant;
         (match index {
             0usize => 0,
             1usize => 3usize,
@@ -774,26 +837,26 @@ impl RoleForm {
     }
     pub fn input(&mut self, input: tui_textarea::Input) -> bool {
         let key = input.key.clone();
-        (match self.selected {
+        (match self.selected_variant {
             0usize => false,
             1usize => self.guest.input(input.clone()),
             2usize => false,
             _ => false,
         }
             || match key {
-                tui_textarea::Key::Left if self.selected > 0 => {
-                    self.selected -= 1;
+                tui_textarea::Key::Left if self.selected_variant > 0 => {
+                    self.selected_variant -= 1;
                     true
                 }
-                tui_textarea::Key::Right if self.selected + 1 < 3usize => {
-                    self.selected += 1;
+                tui_textarea::Key::Right if self.selected_variant + 1 < 3usize => {
+                    self.selected_variant += 1;
                     true
                 }
                 _ => false,
             })
     }
     pub fn build(&self) -> Option<Role> {
-        match self.selected {
+        match self.selected_variant {
             0usize => Some(Role::Admin),
             1usize => self.guest.build(),
             2usize => Some(Role::User),
@@ -804,17 +867,17 @@ impl RoleForm {
         &self,
         area: ratatui::layout::Rect,
         buf: &mut ratatui::buffer::Buffer,
-        infocus: bool,
+        state: bool,
     ) {
         use ratatui::widgets::WidgetRef;
         use ratatui::prelude::Constraint;
-        let label = match self.selected {
+        let label = match self.selected_variant {
             0usize => "Admin",
             1usize => "Guest",
             2usize => "User",
             _ => "???",
         };
-        let title = if infocus {
+        let title = if state {
             ::alloc::__export::must_use({
                 let res = ::alloc::fmt::format(format_args!(">[{0}]", label));
                 res
@@ -836,9 +899,9 @@ impl RoleForm {
             .split(area);
         ratatui::widgets::Paragraph::new(title).render_ref(chunks[0], buf);
         let area = chunks[1];
-        match self.selected {
+        match self.selected_variant {
             0usize => {}
-            1usize => self.guest.render(area, buf),
+            1usize => self.guest.render(area, buf, &mut state),
             2usize => {}
             _ => {}
         };

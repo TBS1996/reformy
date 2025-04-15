@@ -71,6 +71,14 @@ fn generate_enum_form(
                     .map(|f| f.ident.as_ref().unwrap())
                     .collect();
 
+                
+                let field_indices: Vec<_> = (0..field_idents.len()).collect();
+                let field_input_match = field_indices.iter().zip(field_idents.iter()).map(|(i, f)| {
+                    quote! {
+                        i if i == #i => self.#f.input(input.clone()),
+                    }
+                });
+
                 let field_count = field_idents.len();
                 form_heights.push(quote! {
                     #idx => #field_count,
@@ -109,7 +117,16 @@ fn generate_enum_form(
                                 ])
                                 .split(chunks[#idx]);
 
-                            let label = ratatui::widgets::Paragraph::new(stringify!(#f));
+                      //      let label = ratatui::widgets::Paragraph::new(stringify!(#f));
+
+                            
+                            let label = if self.selected == #idx && *state {
+                                ratatui::widgets::Paragraph::new(format!("> {}", stringify!(#f)))
+                                    .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
+                            } else {
+                                ratatui::widgets::Paragraph::new(stringify!(#f))
+                            };
+                            
                             label.render_ref(cols[0], buf);
                             self.#f.input.render(cols[1], buf);
                         }
@@ -118,12 +135,14 @@ fn generate_enum_form(
 
                 let form_struct = quote! {
                     pub struct #form_struct_name {
+                        pub selected: usize,
                         #(#form_fields,)*
                     }
 
                     impl #form_struct_name {
                         pub fn new() -> Self {
                             Self {
+                                selected: 0,
                                 #(#field_inits,)*
                             }
                         }
@@ -133,15 +152,33 @@ fn generate_enum_form(
                                 #(#field_builds,)*
                             })
                         }
+                       
 
                         pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-                            let mut handled = false;
-                            #(handled |= self.#field_idents.input(input.clone());)*;
-                            handled
+                            let handled = match self.selected {
+                                #(#field_input_match)*
+                                _ => false,
+                            };
+
+                            if handled {
+                                return true;
+                            }
+                            
+                            match input.key {
+                                tui_textarea::Key::Down if self.selected < #field_count - 1 => {
+                                    self.selected += 1;
+                                    true
+                                }
+                                tui_textarea::Key::Up if self.selected > 0 => {
+                                    self.selected -= 1;
+                                    true
+                                }
+                                _ => false,
+                            }
                         }
 
 
-                        pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+                        pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut bool) {
                             use ratatui::widgets::WidgetRef;
                             use ratatui::prelude::Constraint;
 
@@ -175,7 +212,7 @@ fn generate_enum_form(
                 });
 
                 render_matches.push(quote! {
-                    #idx => self.#v_snake.render(area, buf),
+                    #idx => self.#v_snake.render(area, buf, &mut state.clone()),
                 });
                 }
          
@@ -197,20 +234,20 @@ fn generate_enum_form(
         #(#variant_titles)*
 
         pub struct #form_name {
-            pub selected: usize,
+            pub selected_variant: usize,
             #(#variant_fields,)*
         }
 
         impl #form_name {
             pub fn new() -> Self {
                 Self {
-                    selected: 0,
+                    selected_variant: 0,
                     #(#variant_inits,)*
                 }
             }
             
             pub fn form_height(&self) -> u16 {
-                let index = self.selected;
+                let index = self.selected_variant;
                 (match index {
                     #(#form_heights)*
                     _ => 0,
@@ -219,17 +256,17 @@ fn generate_enum_form(
 
             pub fn input(&mut self, input: tui_textarea::Input) -> bool {
                 let key = input.key.clone();
-                (match self.selected {
+                (match self.selected_variant {
                     #(#input_matches)*
                     _ => false,
                 } ||
                 match key {
-                    tui_textarea::Key::Left if self.selected > 0 => {
-                        self.selected -= 1;
+                    tui_textarea::Key::Left if self.selected_variant > 0 => {
+                        self.selected_variant -= 1;
                         true
                     }
-                    tui_textarea::Key::Right if self.selected + 1 < #num_variants => {
-                        self.selected += 1;
+                    tui_textarea::Key::Right if self.selected_variant + 1 < #num_variants => {
+                        self.selected_variant += 1;
                         true
                     }
                     _ => false,
@@ -237,22 +274,22 @@ fn generate_enum_form(
             }
 
             pub fn build(&self) -> Option<#name> {
-                match self.selected {
+                match self.selected_variant {
                     #(#build_matches)*
                     _ => None,
                 }
             }
 
-            pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, infocus: bool) {
+            pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: bool) {
                 use ratatui::widgets::WidgetRef;
                 use ratatui::prelude::Constraint;
 
-                let label = match self.selected {
+                let label = match self.selected_variant {
                     #(#variant_display)*
                     _ => "???",
                 };
 
-                let title = if infocus {
+                let title = if state {
                     format!(">[{}]", label)
                 } else {
                     format!("[{}]", label)
@@ -267,7 +304,7 @@ fn generate_enum_form(
 
                 let area = chunks[1];
 
-                match self.selected {
+                match self.selected_variant {
                     #(#render_matches)*
                     _ => {}
                 };
