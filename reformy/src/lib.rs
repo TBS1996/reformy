@@ -27,6 +27,7 @@ struct VariantInfo {
     init: proc_macro2::TokenStream,
     render: proc_macro2::TokenStream,
     titles: proc_macro2::TokenStream,
+    display: proc_macro2::TokenStream,
 }
 
 fn generate_enum_form(
@@ -35,8 +36,6 @@ fn generate_enum_form(
     data_enum: &syn::DataEnum,
 ) -> TokenStream {
     let mut fields: Vec<VariantInfo> = vec![];
-
-    let mut variant_display = Vec::new();      // display names
 
     for (idx, variant) in data_enum.variants.iter().enumerate() {
         let v_ident = &variant.ident;
@@ -68,7 +67,12 @@ fn generate_enum_form(
 
                 let titles = quote! {};
 
-                fields.push(VariantInfo {field: variant_field, heights, input, build, init, render, titles});
+                let display = quote! {
+                    #idx => #variant_label,
+                };
+
+
+                fields.push(VariantInfo {field: variant_field, heights, input, build, init, render, titles, display});
 
             }
             syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() == 1 => {
@@ -155,8 +159,12 @@ fn generate_enum_form(
                     #idx => self.#v_snake.render(area, buf, &mut state.clone()),
                 };
 
+                let display = quote! {
+                    #idx => #variant_label,
+                };
 
-                fields.push(VariantInfo {field, heights, input, build, init, render, titles});
+
+                fields.push(VariantInfo {field, heights, input, build, init, render, titles, display});
                 
             }
 
@@ -311,7 +319,11 @@ fn generate_enum_form(
                     #idx => self.#v_snake.render(area, buf, &mut state.clone()),
                 };
 
-                fields.push(VariantInfo {field, heights, input, build, init, render, titles: form_struct});
+                let display = quote! {
+                    #idx => #variant_label,
+                };
+
+                fields.push(VariantInfo {field, heights, input, build, init, render, titles: form_struct, display});
 
                 }
          
@@ -322,9 +334,6 @@ fn generate_enum_form(
             }
         }
 
-        variant_display.push(quote! {
-            #idx => #variant_label,
-        });
     }
 
     let variant_fields: Vec<_> = fields.iter().map(|info|info.field.clone()).collect();
@@ -334,6 +343,7 @@ fn generate_enum_form(
     let variant_inits: Vec<_> = fields.iter().map(|info|info.init.clone()).collect();
     let render_matches: Vec<_> = fields.iter().map(|info|info.render.clone()).collect();
     let variant_titles: Vec<_> = fields.iter().map(|info|info.titles.clone()).collect();
+    let variant_display: Vec<_> = fields.iter().map(|info|info.display.clone()).collect();
 
     let num_variants = variant_display.len();
 
