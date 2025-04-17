@@ -5,20 +5,19 @@ use syn::{DeriveInput, Field, FieldsNamed, FieldsUnnamed, Variant, parse_macro_i
 #[proc_macro_derive(FormRenderable, attributes(form))]
 pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = &input.ident;
+    let name = input.ident;
     let form_name = format_ident!("{}Form", name);
 
     match input.data {
-        syn::Data::Enum(data_enum) => generate_enum_form(name, &form_name, &data_enum),
+        syn::Data::Enum(data_enum) => generate_enum_form(&name, &form_name, data_enum),
         syn::Data::Struct(data_struct) => {
-            generate_struct_form(name, &form_name, &data_struct.fields)
+            generate_struct_form(name, data_struct.fields)
         }
         _ => syn::Error::new_spanned(name, "Only structs and unit enums are supported")
             .to_compile_error()
             .into(),
     }
 }
-
 
 fn extract_unit(
     name: &syn::Ident,
@@ -166,8 +165,9 @@ fn extract_unnamed(
     }
 }
 
+
 fn extract_named(
-    fields_named: &FieldsNamed,
+    fields_named: FieldsNamed,
     name: &syn::Ident,
     v_ident: &syn::Ident,
     v_snake: &syn::Ident,
@@ -334,15 +334,15 @@ fn extract_named(
     }
 }
 
-fn extract_variant(name: &syn::Ident, variant: &Variant, idx: usize) -> VariantInfo {
+fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantInfo {
     let v_ident = &variant.ident;
     let v_snake = format_ident!("{}", v_ident.to_string().to_lowercase());
     let variant_label = v_ident.to_string();
 
-    match &variant.fields {
+    match variant.fields {
         syn::Fields::Unit => extract_unit(name, v_ident, &v_snake, variant_label, idx),
         syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() == 1 => {
-            extract_unnamed(fields_unnamed, name, v_ident, &v_snake, variant_label, idx)
+            extract_unnamed(&fields_unnamed, name, v_ident, &v_snake, variant_label, idx)
         }
         syn::Fields::Named(fields_named) => {
             extract_named(fields_named, name, v_ident, &v_snake, variant_label, idx)
@@ -362,11 +362,11 @@ fn extract_variant(name: &syn::Ident, variant: &Variant, idx: usize) -> VariantI
 fn generate_enum_form(
     name: &syn::Ident,
     form_name: &syn::Ident,
-    data_enum: &syn::DataEnum,
+    data_enum: syn::DataEnum,
 ) -> TokenStream {
     let mut fields: Vec<VariantInfo> = vec![];
 
-    for (idx, variant) in data_enum.variants.iter().enumerate() {
+    for (idx, variant) in data_enum.variants.into_iter().enumerate() {
         fields.push(extract_variant(name, variant, idx));
     }
 
@@ -516,6 +516,106 @@ struct MyStruct {
     fields: Vec<StructField>,
 }
 
+impl MyStruct {
+    fn new(name: syn::Ident, variant: Option<syn::Ident>, fields: Vec<Field>) -> Self {
+
+    let mut xfields: Vec<StructField> = vec![];
+
+    for (idx, field) in fields.iter().enumerate() {
+        xfields.push(extract_field(idx, field));
+    }
+
+    Self {
+        name,
+        variant,
+        fields: xfields,
+    }
+        
+    }
+
+    fn form_name(&self) -> syn::Ident {
+        format_ident!("{}Form", self.name)
+    }
+
+    fn generate(&self) -> proc_macro2::TokenStream {
+        let struct_fields: Vec<_> = self.fields.iter().map(|i| i.field.clone()).collect();
+        let height_exprs: Vec<_> = self.fields.iter().map(|i| i.height.clone()).collect();
+        let field_inits: Vec<_> = self.fields.iter().map(|i| i.init.clone()).collect();
+        let to_struct_fields: Vec<_> = self.fields.iter().map(|i| i.build.clone()).collect();
+        let selected_matches: Vec<_> = self.fields.iter().map(|i| i.input.clone()).collect();
+        let render_calls: Vec<_> = self.fields.iter().map(|i| i.render.clone()).collect();
+        let field_count = struct_fields.len();
+        let name = &self.name;
+        let form_name = self.form_name();
+
+        quote! {
+            pub struct #form_name {
+                #(#struct_fields,)*
+                pub selected: usize,
+            }
+
+            impl #form_name {
+                pub fn new() -> Self {
+                    Self {
+                        #(#field_inits,)*
+                        selected: 0,
+                    }
+                }
+
+                pub fn form_height(&self) -> u16 {
+                    0 #( + #height_exprs )* + 1
+                }
+
+                pub fn input(&mut self, input: tui_textarea::Input) -> bool {
+                    let theinput = input.clone();
+                    let handled = match self.selected {
+                        #(#selected_matches)*
+                        _ => unreachable!(),
+                    };
+
+                    if handled {
+                        return true;
+                    }
+
+                    match input.key {
+                        tui_textarea::Key::Down if self.selected < #field_count - 1 => {
+                            self.selected += 1;
+                            true
+                        }
+                        tui_textarea::Key::Up if self.selected > 0 => {
+                            self.selected -= 1;
+                            true
+                        }
+                        _ => false,
+                    }
+                }
+
+                fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut bool) {
+                    use ratatui::layout::{Layout, Direction, Constraint};
+                    use ratatui::widgets::WidgetRef;
+
+                    let chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints(vec![#(Constraint::Length(#height_exprs)),*])
+                        .split(area);
+
+                    let title = ratatui::widgets::Paragraph::new(stringify!(self.name).to_string() + ":")
+        .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
+
+                    #(#render_calls)*
+
+                }
+
+                pub fn build(&self) -> Option<#name> {
+                    Some(#name {
+                        #(#to_struct_fields,)*
+                    })
+                }
+            }
+        }
+    }
+}
+
 fn extract_field(idx: usize, field: &Field) -> StructField {
     let ident = field.ident.as_ref().unwrap();
     let ty = &field.ty;
@@ -526,13 +626,10 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
 
         let field = quote! { pub #ident: #nested_form };
 
-
         let init = quote! { #ident: #nested_form::new() };
         let to_fields = quote! { #ident: self.#ident.build()? };
         let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
         let height = quote! { self.#ident.form_height() };
-        let label_text = format!("{}:", stringify!(#ident));
-        let label_length = label_text.len() as u16 + 3;
 
         let render = quote! {
             {
@@ -571,7 +668,14 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
             }
         };
 
-        StructField {field, height, init, build: to_fields, input, render}
+        StructField {
+            field,
+            height,
+            init,
+            build: to_fields,
+            input,
+            render,
+        }
     } else {
         let field = quote! { pub #ident: ::reformy_core::Filtext<#ty> };
         let init = quote! { #ident: ::reformy_core::Filtext::new() };
@@ -600,17 +704,23 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
             }
         };
         let height = quote! { 1 };
-        StructField {field, height, init, build: to_fields, input, render}
+        StructField {
+            field,
+            height,
+            init,
+            build: to_fields,
+            input,
+            render,
+        }
     }
 }
 
 fn generate_struct_form(
-    name: &syn::Ident,
-    form_name: &syn::Ident,
-    fields: &syn::Fields,
+    name: syn::Ident,
+    fields: syn::Fields,
 ) -> TokenStream {
     let named_fields = match fields {
-        syn::Fields::Named(fields) => &fields.named,
+        syn::Fields::Named(fields) => fields.named,
         _ => {
             return syn::Error::new_spanned(name, "Only named fields supported")
                 .to_compile_error()
@@ -618,87 +728,15 @@ fn generate_struct_form(
         }
     };
 
-    let mut fields: Vec<StructField> = vec![];
+    
 
-    for (idx, field) in named_fields.iter().enumerate() {
-        fields.push(extract_field(idx, field));
-    }
+    let mystruct = MyStruct::new(name.clone(), None, named_fields.into_iter().collect());
 
-    let field_count = named_fields.len();
+    let form_name = mystruct.form_name();
 
-    let struct_fields: Vec<_> = fields.iter().map(|i|i.field.clone()).collect();
-    let height_exprs: Vec<_> = fields.iter().map(|i|i.height.clone()).collect();
-    let field_inits: Vec<_> = fields.iter().map(|i|i.init.clone()).collect();
-    let to_struct_fields: Vec<_> = fields.iter().map(|i|i.build.clone()).collect();
-    let selected_matches: Vec<_> = fields.iter().map(|i|i.input.clone()).collect();
-    let render_calls: Vec<_> = fields.iter().map(|i|i.render.clone()).collect();
+    let other = mystruct.generate();
 
-
-    quote! {
-        pub struct #form_name {
-            #(#struct_fields,)*
-            pub selected: usize,
-        }
-
-        impl #form_name {
-            pub fn new() -> Self {
-                Self {
-                    #(#field_inits,)*
-                    selected: 0,
-                }
-            }
-
-            pub fn form_height(&self) -> u16 {
-                0 #( + #height_exprs )* + 1
-            }
-
-            pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-                let theinput = input.clone();
-                let handled = match self.selected {
-                    #(#selected_matches)*
-                    _ => unreachable!(),
-                };
-
-                if handled {
-                    return true;
-                }
-
-                match input.key {
-                    tui_textarea::Key::Down if self.selected < #field_count - 1 => {
-                        self.selected += 1;
-                        true
-                    }
-                    tui_textarea::Key::Up if self.selected > 0 => {
-                        self.selected -= 1;
-                        true
-                    }
-                    _ => false,
-                }
-            }
-
-            fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut bool) {
-                use ratatui::layout::{Layout, Direction, Constraint};
-                use ratatui::widgets::WidgetRef;
-
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![#(Constraint::Length(#height_exprs)),*])
-                    .split(area);
-
-                let title = ratatui::widgets::Paragraph::new(stringify!(#name).to_string() + ":")
-    .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
-
-                #(#render_calls)*
-                
-            }
-
-            pub fn build(&self) -> Option<#name> {
-                Some(#name {
-                    #(#to_struct_fields,)*
-                })
-            }
-        }
-
+    let widget: proc_macro2::TokenStream = quote! {
         impl ratatui::widgets::WidgetRef for #form_name {
             fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
                 ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
@@ -718,6 +756,11 @@ fn generate_struct_form(
                 #form_name::new()
             }
         }
+    };
+
+    quote! {
+        #other
+        #widget
     }
     .into()
 }

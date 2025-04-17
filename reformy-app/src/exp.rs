@@ -76,223 +76,6 @@ impl ::core::default::Default for User {
         }
     }
 }
-pub struct UserForm {
-    pub name: ::reformy_core::Filtext<String>,
-    pub age: ::reformy_core::Filtext<usize>,
-    pub role: RoleForm,
-    pub email: ::reformy_core::Filtext<Email>,
-    pub address: AddressForm,
-    pub selected: usize,
-}
-impl UserForm {
-    pub fn new() -> Self {
-        Self {
-            name: ::reformy_core::Filtext::new(),
-            age: ::reformy_core::Filtext::new(),
-            role: RoleForm::new(),
-            email: ::reformy_core::Filtext::new(),
-            address: AddressForm::new(),
-            selected: 0,
-        }
-    }
-    pub fn form_height(&self) -> u16 {
-        0 + 1 + 1 + self.role.form_height() + 1 + self.address.form_height() + 1
-    }
-    pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-        let theinput = input.clone();
-        let handled = match self.selected {
-            i if i == 0usize => self.name.input(theinput.clone()),
-            i if i == 1usize => self.age.input(theinput.clone()),
-            i if i == 2usize => self.role.input(theinput.clone()),
-            i if i == 3usize => self.email.input(theinput.clone()),
-            i if i == 4usize => self.address.input(theinput.clone()),
-            _ => ::core::panicking::panic("internal error: entered unreachable code"),
-        };
-        if handled {
-            return true;
-        }
-        match input.key {
-            tui_textarea::Key::Down if self.selected < 5usize - 1 => {
-                self.selected += 1;
-                true
-            }
-            tui_textarea::Key::Up if self.selected > 0 => {
-                self.selected -= 1;
-                true
-            }
-            _ => false,
-        }
-    }
-    pub fn build(&self) -> Option<User> {
-        Some(User {
-            name: self.name.value()?,
-            age: self.age.value()?,
-            role: self.role.build()?,
-            email: self.email.value()?,
-            address: self.address.build()?,
-        })
-    }
-}
-impl ratatui::widgets::WidgetRef for UserForm {
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-    ) {
-        ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
-    }
-}
-impl ratatui::widgets::StatefulWidgetRef for UserForm {
-    type State = bool;
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: &mut Self::State,
-    ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
-        use ratatui::widgets::WidgetRef;
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(
-                <[_]>::into_vec(
-                    #[rustc_box]
-                    ::alloc::boxed::Box::new([
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                        Constraint::Length(self.role.form_height()),
-                        Constraint::Length(1),
-                        Constraint::Length(self.address.form_height()),
-                    ]),
-                ),
-            )
-            .split(area);
-        let title = ratatui::widgets::Paragraph::new("User".to_string() + ":")
-            .style(
-                ratatui::style::Style::default()
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            );
-        {
-            let chunk = chunks[0usize + 1];
-            let cols = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Length(12),
-                    ratatui::layout::Constraint::Min(0),
-                ])
-                .split(chunk);
-            let label = if self.selected == 0usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "name"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
-            } else {
-                ratatui::widgets::Paragraph::new("name")
-            };
-            label.render_ref(cols[0], buf);
-            self.name.input.render(cols[1], buf);
-        }
-        {
-            let chunk = chunks[1usize + 1];
-            let cols = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Length(12),
-                    ratatui::layout::Constraint::Min(0),
-                ])
-                .split(chunk);
-            let label = if self.selected == 1usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(format_args!("> {0}", "age"));
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
-            } else {
-                ratatui::widgets::Paragraph::new("age")
-            };
-            label.render_ref(cols[0], buf);
-            self.age.input.render(cols[1], buf);
-        }
-        {
-            let chunk = chunks[2usize];
-            let cols = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Length(4),
-                    ratatui::layout::Constraint::Min(0),
-                ])
-                .split(chunk);
-            ratatui::widgets::StatefulWidgetRef::render_ref(
-                &self.role,
-                cols[0],
-                buf,
-                &mut (self.selected == 2usize && *state),
-            );
-        }
-        {
-            let chunk = chunks[3usize + 1];
-            let cols = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Length(12),
-                    ratatui::layout::Constraint::Min(0),
-                ])
-                .split(chunk);
-            let label = if self.selected == 3usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "email"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
-            } else {
-                ratatui::widgets::Paragraph::new("email")
-            };
-            label.render_ref(cols[0], buf);
-            self.email.input.render(cols[1], buf);
-        }
-        {
-            let chunk = chunks[4usize];
-            let cols = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Length(4),
-                    ratatui::layout::Constraint::Min(0),
-                ])
-                .split(chunk);
-            ratatui::widgets::StatefulWidgetRef::render_ref(
-                &self.address,
-                cols[0],
-                buf,
-                &mut (self.selected == 4usize && *state),
-            );
-        }
-    }
-}
-impl User {
-    pub fn form() -> UserForm {
-        UserForm::new()
-    }
-}
 struct Address {
     #[form(nested)]
     whatever: Whatever,
@@ -326,171 +109,6 @@ impl ::core::default::Default for Address {
         }
     }
 }
-pub struct AddressForm {
-    pub whatever: WhateverForm,
-    pub street: ::reformy_core::Filtext<String>,
-    pub number: ::reformy_core::Filtext<usize>,
-    pub selected: usize,
-}
-impl AddressForm {
-    pub fn new() -> Self {
-        Self {
-            whatever: WhateverForm::new(),
-            street: ::reformy_core::Filtext::new(),
-            number: ::reformy_core::Filtext::new(),
-            selected: 0,
-        }
-    }
-    pub fn form_height(&self) -> u16 {
-        0 + self.whatever.form_height() + 1 + 1 + 1
-    }
-    pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-        let theinput = input.clone();
-        let handled = match self.selected {
-            i if i == 0usize => self.whatever.input(theinput.clone()),
-            i if i == 1usize => self.street.input(theinput.clone()),
-            i if i == 2usize => self.number.input(theinput.clone()),
-            _ => ::core::panicking::panic("internal error: entered unreachable code"),
-        };
-        if handled {
-            return true;
-        }
-        match input.key {
-            tui_textarea::Key::Down if self.selected < 3usize - 1 => {
-                self.selected += 1;
-                true
-            }
-            tui_textarea::Key::Up if self.selected > 0 => {
-                self.selected -= 1;
-                true
-            }
-            _ => false,
-        }
-    }
-    pub fn build(&self) -> Option<Address> {
-        Some(Address {
-            whatever: self.whatever.build()?,
-            street: self.street.value()?,
-            number: self.number.value()?,
-        })
-    }
-}
-impl ratatui::widgets::WidgetRef for AddressForm {
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-    ) {
-        ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
-    }
-}
-impl ratatui::widgets::StatefulWidgetRef for AddressForm {
-    type State = bool;
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: &mut Self::State,
-    ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
-        use ratatui::widgets::WidgetRef;
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(
-                <[_]>::into_vec(
-                    #[rustc_box]
-                    ::alloc::boxed::Box::new([
-                        Constraint::Length(self.whatever.form_height()),
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                    ]),
-                ),
-            )
-            .split(area);
-        let title = ratatui::widgets::Paragraph::new("Address".to_string() + ":")
-            .style(
-                ratatui::style::Style::default()
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            );
-        {
-            let chunk = chunks[0usize];
-            let cols = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Length(4),
-                    ratatui::layout::Constraint::Min(0),
-                ])
-                .split(chunk);
-            ratatui::widgets::StatefulWidgetRef::render_ref(
-                &self.whatever,
-                cols[0],
-                buf,
-                &mut (self.selected == 0usize && *state),
-            );
-        }
-        {
-            let chunk = chunks[1usize + 1];
-            let cols = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Length(12),
-                    ratatui::layout::Constraint::Min(0),
-                ])
-                .split(chunk);
-            let label = if self.selected == 1usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "street"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
-            } else {
-                ratatui::widgets::Paragraph::new("street")
-            };
-            label.render_ref(cols[0], buf);
-            self.street.input.render(cols[1], buf);
-        }
-        {
-            let chunk = chunks[2usize + 1];
-            let cols = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Length(12),
-                    ratatui::layout::Constraint::Min(0),
-                ])
-                .split(chunk);
-            let label = if self.selected == 2usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "number"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
-            } else {
-                ratatui::widgets::Paragraph::new("number")
-            };
-            label.render_ref(cols[0], buf);
-            self.number.input.render(cols[1], buf);
-        }
-    }
-}
-impl Address {
-    pub fn form() -> AddressForm {
-        AddressForm::new()
-    }
-}
 struct Whatever {
     foo: String,
 }
@@ -513,111 +131,6 @@ impl ::core::default::Default for Whatever {
         Whatever {
             foo: ::core::default::Default::default(),
         }
-    }
-}
-pub struct WhateverForm {
-    pub foo: ::reformy_core::Filtext<String>,
-    pub selected: usize,
-}
-impl WhateverForm {
-    pub fn new() -> Self {
-        Self {
-            foo: ::reformy_core::Filtext::new(),
-            selected: 0,
-        }
-    }
-    pub fn form_height(&self) -> u16 {
-        0 + 1 + 1
-    }
-    pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-        let theinput = input.clone();
-        let handled = match self.selected {
-            i if i == 0usize => self.foo.input(theinput.clone()),
-            _ => ::core::panicking::panic("internal error: entered unreachable code"),
-        };
-        if handled {
-            return true;
-        }
-        match input.key {
-            tui_textarea::Key::Down if self.selected < 1usize - 1 => {
-                self.selected += 1;
-                true
-            }
-            tui_textarea::Key::Up if self.selected > 0 => {
-                self.selected -= 1;
-                true
-            }
-            _ => false,
-        }
-    }
-    pub fn build(&self) -> Option<Whatever> {
-        Some(Whatever { foo: self.foo.value()? })
-    }
-}
-impl ratatui::widgets::WidgetRef for WhateverForm {
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-    ) {
-        ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
-    }
-}
-impl ratatui::widgets::StatefulWidgetRef for WhateverForm {
-    type State = bool;
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: &mut Self::State,
-    ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
-        use ratatui::widgets::WidgetRef;
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(
-                <[_]>::into_vec(
-                    #[rustc_box]
-                    ::alloc::boxed::Box::new([Constraint::Length(1)]),
-                ),
-            )
-            .split(area);
-        let title = ratatui::widgets::Paragraph::new("Whatever".to_string() + ":")
-            .style(
-                ratatui::style::Style::default()
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            );
-        {
-            let chunk = chunks[0usize + 1];
-            let cols = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Length(12),
-                    ratatui::layout::Constraint::Min(0),
-                ])
-                .split(chunk);
-            let label = if self.selected == 0usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(format_args!("> {0}", "foo"));
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
-            } else {
-                ratatui::widgets::Paragraph::new("foo")
-            };
-            label.render_ref(cols[0], buf);
-            self.foo.input.render(cols[1], buf);
-        }
-    }
-}
-impl Whatever {
-    pub fn form() -> WhateverForm {
-        WhateverForm::new()
     }
 }
 enum Role {
@@ -699,7 +212,7 @@ impl RoleAdminForm {
         let label = if *state {
             ratatui::widgets::Paragraph::new(
                     ::alloc::__export::must_use({
-                        let res = ::alloc::fmt::format(format_args!("> {0}", "admin"));
+                        let res = ::alloc::fmt::format(format_args!("> {0}", "value"));
                         res
                     }),
                 )
@@ -707,7 +220,7 @@ impl RoleAdminForm {
                     ratatui::style::Style::default().fg(ratatui::style::Color::Yellow),
                 )
         } else {
-            ratatui::widgets::Paragraph::new("admin")
+            ratatui::widgets::Paragraph::new("value")
         };
         label.render_ref(cols[0], buf);
         self.value.input.render(cols[1], buf);
@@ -883,7 +396,7 @@ impl RoleForm {
             1usize => 3usize,
             2usize => 0,
             _ => 0,
-        } + 1) as u16
+        } + 2) as u16
     }
     pub fn input(&mut self, input: tui_textarea::Input) -> bool {
         let key = input.key.clone();
@@ -929,12 +442,12 @@ impl RoleForm {
         };
         let title = if state {
             ::alloc::__export::must_use({
-                let res = ::alloc::fmt::format(format_args!(">{0}: {1}", "Role", label));
+                let res = ::alloc::fmt::format(format_args!(">{0}: ", label));
                 res
             })
         } else {
             ::alloc::__export::must_use({
-                let res = ::alloc::fmt::format(format_args!("{0}: {1}", "Role", label));
+                let res = ::alloc::fmt::format(format_args!("{0}: ", label));
                 res
             })
         };
@@ -947,7 +460,13 @@ impl RoleForm {
                 ),
             )
             .split(area);
-        ratatui::widgets::Paragraph::new(title).render_ref(chunks[0], buf);
+        ratatui::widgets::Paragraph::new(
+                ::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("[{0}]", label));
+                    res
+                }),
+            )
+            .render_ref(chunks[0], buf);
         let area = chunks[1];
         let chunks = ratatui::layout::Layout::default()
             .direction(ratatui::layout::Direction::Horizontal)
