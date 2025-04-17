@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
-use syn::{DeriveInput, Field, parse_macro_input};
+use syn::{parse_macro_input, DeriveInput, Field, FieldsNamed, FieldsUnnamed, Variant};
 
 #[proc_macro_derive(FormRenderable, attributes(form))]
 pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
@@ -30,52 +30,39 @@ struct VariantInfo {
     display: proc_macro2::TokenStream,
 }
 
-fn generate_enum_form(
-    name: &syn::Ident,
-    form_name: &syn::Ident,
-    data_enum: &syn::DataEnum,
-) -> TokenStream {
-    let mut fields: Vec<VariantInfo> = vec![];
 
-    for (idx, variant) in data_enum.variants.iter().enumerate() {
-        let v_ident = &variant.ident;
-        let v_snake = format_ident!("{}", v_ident.to_string().to_lowercase());
-        let variant_label = v_ident.to_string();
+fn extract_unit(name: &syn::Ident, v_ident: &syn::Ident, v_snake: &syn::Ident, variant_label: String, idx: usize) -> VariantInfo {
+    let variant_field = quote! { pub #v_snake: () };
+    let heights = quote! {
+        #idx => 0,
+    };
 
-        match &variant.fields {
-            syn::Fields::Unit => {
-                let variant_field = quote! { pub #v_snake: () };
-                let heights = quote! {
-                    #idx => 0,
-                };
-              
+    let init = quote! { #v_snake: () };
 
-                let init = quote! { #v_snake: () };
+    let build = quote! {
+        #idx => Some(#name::#v_ident),
+    };
 
-                let build = quote! {
-                    #idx => Some(#name::#v_ident),
-                };
+    let input = quote! {
+        #idx => false,
+    };
 
-                let input = quote! {
-                    #idx => false,
-                };
-                
+    let render=quote! {
+        #idx => {}
+    };
 
-                let render=quote! {
-                    #idx => {}
-                };
+    let titles = quote! {};
 
-                let titles = quote! {};
+    let display = quote! {
+        #idx => #variant_label,
+    };
 
-                let display = quote! {
-                    #idx => #variant_label,
-                };
+    VariantInfo {field: variant_field, heights, input, build, init, render, titles, display}
+}
 
 
-                fields.push(VariantInfo {field: variant_field, heights, input, build, init, render, titles, display});
+fn extract_unnamed(fields_unnamed: &FieldsUnnamed, name: &syn::Ident, v_ident: &syn::Ident, v_snake: &syn::Ident, variant_label: String, idx: usize) -> VariantInfo {
 
-            }
-            syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() == 1 => {
                 let form_field_type = &fields_unnamed.unnamed[0].ty;
                 let form_field_name = format_ident!("value");
                 let form_struct_name = format_ident!("{}{}Form", name, v_ident);
@@ -84,12 +71,9 @@ fn generate_enum_form(
                     pub #v_snake: #form_struct_name
                 };
 
-
                 let heights = quote! {
                     #idx => 1,
                 };
-
-                
 
                 let titles = quote! {
                     pub struct #form_struct_name {
@@ -163,12 +147,16 @@ fn generate_enum_form(
                     #idx => #variant_label,
                 };
 
-
-                fields.push(VariantInfo {field, heights, input, build, init, render, titles, display});
+                VariantInfo {field, heights, input, build, init, render, titles, display}
                 
-            }
 
-            syn::Fields::Named(fields_named) => {
+    
+}
+
+
+fn extract_named(fields_named: &FieldsNamed, name: &syn::Ident, v_ident: &syn::Ident, v_snake: &syn::Ident, variant_label: String, idx: usize) -> VariantInfo {
+
+
                 let form_struct_name = format_ident!("{}{}Form", name, v_ident);
                 
                 let field = quote! {
@@ -225,9 +213,6 @@ fn generate_enum_form(
                                     ratatui::layout::Constraint::Min(0),
                                 ])
                                 .split(chunks[#idx]);
-
-                      //      let label = ratatui::widgets::Paragraph::new(stringify!(#f));
-
                             
                             let label = if self.selected == #idx && *state {
                                 ratatui::widgets::Paragraph::new(format!("> {}", stringify!(#f)))
@@ -323,17 +308,46 @@ fn generate_enum_form(
                     #idx => #variant_label,
                 };
 
-                fields.push(VariantInfo {field, heights, input, build, init, render, titles: form_struct, display});
+                VariantInfo {field, heights, input, build, init, render, titles: form_struct, display}
+                
+}
 
-                }
+fn extract_variant(name: &syn::Ident, variant: &Variant, idx: usize) -> VariantInfo {
+        let v_ident = &variant.ident;
+        let v_snake = format_ident!("{}", v_ident.to_string().to_lowercase());
+        let variant_label = v_ident.to_string();
+
+        match &variant.fields {
+            syn::Fields::Unit => {
+                extract_unit(name, v_ident, &v_snake, variant_label, idx)
+
+            }
+            syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() == 1 => {
+                extract_unnamed(fields_unnamed, name, v_ident, &v_snake, variant_label, idx)
+            }
+
+            syn::Fields::Named(fields_named) => {extract_named(fields_named, name, v_ident, &v_snake, variant_label, idx)}
          
             _ => {
+                panic!()
+                /*
                 return syn::Error::new_spanned(&variant.fields, "Only unit or struct variants are supported")
                     .to_compile_error()
                     .into();
+                    */
             }
         }
+}
 
+fn generate_enum_form(
+    name: &syn::Ident,
+    form_name: &syn::Ident,
+    data_enum: &syn::DataEnum,
+) -> TokenStream {
+    let mut fields: Vec<VariantInfo> = vec![];
+
+    for (idx, variant) in data_enum.variants.iter().enumerate() {
+        fields.push(extract_variant(name, variant, idx));
     }
 
     let variant_fields: Vec<_> = fields.iter().map(|info|info.field.clone()).collect();
