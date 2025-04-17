@@ -63,7 +63,85 @@ fn generate_enum_form(
                     }
                 });
             }
+            syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() == 1 => {
+                let form_field_type = &fields_unnamed.unnamed[0].ty;
+                let form_field_name = format_ident!("value");
+                let form_struct_name = format_ident!("{}{}Form", name, v_ident);
 
+                form_heights.push(quote! {
+                    #idx => 1,
+                });
+
+                variant_titles.push(quote! {
+                    pub struct #form_struct_name {
+                        pub #form_field_name: ::reformy_core::Filtext<#form_field_type>
+                    }
+
+                    impl #form_struct_name {
+                        pub fn new() -> Self {
+                            Self {
+                                #form_field_name: ::reformy_core::Filtext::new(),
+                            }
+                        }
+
+                        pub fn build(&self) -> Option<#name> {
+                            Some(#name::#v_ident(self.#form_field_name.value()?))
+                        }
+
+                        pub fn input(&mut self, input: tui_textarea::Input) -> bool {
+                            self.#form_field_name.input(input)
+                        }
+
+                        pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut bool) {
+                            use ratatui::widgets::WidgetRef;
+                            use ratatui::prelude::Constraint;
+
+                            let chunks = ratatui::layout::Layout::default()
+                                .direction(ratatui::layout::Direction::Vertical)
+                                .constraints(vec![Constraint::Length(1)])
+                                .split(area);
+
+                            let cols = ratatui::layout::Layout::default()
+                                .direction(ratatui::layout::Direction::Horizontal)
+                                .constraints([
+                                    ratatui::layout::Constraint::Length(12),
+                                    ratatui::layout::Constraint::Min(0),
+                                ])
+                                .split(chunks[0]);
+
+                            let label = if *state {
+                                ratatui::widgets::Paragraph::new(format!("> {}", stringify!(#v_snake)))
+                                    .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
+                            } else {
+                                ratatui::widgets::Paragraph::new(stringify!(#v_snake))
+                            };
+
+                            label.render_ref(cols[0], buf);
+                            self.#form_field_name.input.render(cols[1], buf);
+                        }
+                    }
+                });
+
+                variant_fields.push(quote! {
+                    pub #v_snake: #form_struct_name
+                });
+
+                variant_inits.push(quote! {
+                    #v_snake: #form_struct_name::new()
+                });
+
+                build_matches.push(quote! {
+                    #idx => self.#v_snake.build(),
+                });
+
+                input_matches.push(quote! {
+                    #idx => self.#v_snake.input(input.clone()),
+                });
+
+                render_matches.push(quote! {
+                    #idx => self.#v_snake.render(area, buf, &mut state.clone()),
+                });
+            }
             syn::Fields::Named(fields_named) => {
                 let form_struct_name = format_ident!("{}{}Form", name, v_ident);
 

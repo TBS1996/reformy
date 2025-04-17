@@ -33,9 +33,9 @@ struct User {
     age: usize,
     #[form(nested)]
     role: Role,
-    email: Email,
-    #[form(nested)]
-    address: Address,
+    //   email: Email,
+    //    #[form(nested)]
+    //   address: Address,
 }
 
 #[derive(Debug, Default, FormRenderable)]
@@ -53,7 +53,7 @@ struct Whatever {
 
 #[derive(Debug, Default, FormRenderable)]
 enum Role {
-    Admin,
+    Admin(String),
     Guest {
         name: String,
         cool: String,
