@@ -19,16 +19,6 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     }
 }
 
-struct VariantInfo {
-    field: proc_macro2::TokenStream,
-    heights: proc_macro2::TokenStream,
-    input: proc_macro2::TokenStream,
-    build: proc_macro2::TokenStream,
-    init: proc_macro2::TokenStream,
-    render: proc_macro2::TokenStream,
-    titles: proc_macro2::TokenStream,
-    display: proc_macro2::TokenStream,
-}
 
 fn extract_unit(
     name: &syn::Ident,
@@ -64,7 +54,7 @@ fn extract_unit(
 
     VariantInfo {
         field: variant_field,
-        heights,
+        height: heights,
         input,
         build,
         init,
@@ -166,7 +156,7 @@ fn extract_unnamed(
 
     VariantInfo {
         field,
-        heights,
+        height: heights,
         input,
         build,
         init,
@@ -334,7 +324,7 @@ fn extract_named(
 
     VariantInfo {
         field,
-        heights,
+        height: heights,
         input,
         build,
         init,
@@ -354,7 +344,6 @@ fn extract_variant(name: &syn::Ident, variant: &Variant, idx: usize) -> VariantI
         syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() == 1 => {
             extract_unnamed(fields_unnamed, name, v_ident, &v_snake, variant_label, idx)
         }
-
         syn::Fields::Named(fields_named) => {
             extract_named(fields_named, name, v_ident, &v_snake, variant_label, idx)
         }
@@ -382,7 +371,7 @@ fn generate_enum_form(
     }
 
     let variant_fields: Vec<_> = fields.iter().map(|info| info.field.clone()).collect();
-    let form_heights: Vec<_> = fields.iter().map(|info| info.heights.clone()).collect();
+    let form_heights: Vec<_> = fields.iter().map(|info| info.height.clone()).collect();
     let input_matches: Vec<_> = fields.iter().map(|info| info.input.clone()).collect();
     let build_matches: Vec<_> = fields.iter().map(|info| info.build.clone()).collect();
     let variant_inits: Vec<_> = fields.iter().map(|info| info.init.clone()).collect();
@@ -494,6 +483,26 @@ fn generate_enum_form(
     }.into()
 }
 
+struct VariantInfo {
+    field: proc_macro2::TokenStream,
+    height: proc_macro2::TokenStream,
+    input: proc_macro2::TokenStream,
+    build: proc_macro2::TokenStream,
+    init: proc_macro2::TokenStream,
+    render: proc_macro2::TokenStream,
+    titles: proc_macro2::TokenStream,
+    display: proc_macro2::TokenStream,
+}
+
+struct StructField {
+    field: proc_macro2::TokenStream,
+    height: proc_macro2::TokenStream,
+    input: proc_macro2::TokenStream,
+    build: proc_macro2::TokenStream,
+    init: proc_macro2::TokenStream,
+    render: proc_macro2::TokenStream,
+}
+
 fn generate_struct_form(
     name: &syn::Ident,
     form_name: &syn::Ident,
@@ -508,12 +517,7 @@ fn generate_struct_form(
         }
     };
 
-    let mut struct_fields = Vec::new();
-    let mut field_inits = Vec::new();
-    let mut to_struct_fields = Vec::new();
-    let mut selected_matches = Vec::new();
-    let mut render_calls = Vec::new();
-    let mut height_exprs = Vec::new();
+    let mut fields: Vec<StructField> = vec![];
 
     for (idx, field) in named_fields.iter().enumerate() {
         let ident = field.ident.as_ref().unwrap();
@@ -523,12 +527,13 @@ fn generate_struct_form(
             let nested_form =
                 format_ident!("{}Form", ty.to_token_stream().to_string().replace(' ', ""));
 
-            struct_fields.push(quote! { pub #ident: #nested_form });
-            field_inits.push(quote! { #ident: #nested_form::new() });
-            to_struct_fields.push(quote! { #ident: self.#ident.build()? });
-            selected_matches
-                .push(quote! { i if i == #idx => self.#ident.input(theinput.clone()), });
-            render_calls.push(quote! {
+            let field = quote! { pub #ident: #nested_form };
+
+
+            let init = quote! { #ident: #nested_form::new() };
+            let to_fields = quote! { #ident: self.#ident.build()? };
+            let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
+            let render = quote! {
                 {
                     let chunk = chunks[#idx + 1];
                     let cols = ratatui::layout::Layout::default()
@@ -546,15 +551,15 @@ fn generate_struct_form(
                         &mut (self.selected == #idx && *state),
                     );
                 }
-            });
-            height_exprs.push(quote! { self.#ident.form_height() });
+            };
+            let height = quote! { self.#ident.form_height() };
+            fields.push(StructField {field, height, init, build: to_fields, input, render});
         } else {
-            struct_fields.push(quote! { pub #ident: ::reformy_core::Filtext<#ty> });
-            field_inits.push(quote! { #ident: ::reformy_core::Filtext::new() });
-            to_struct_fields.push(quote! { #ident: self.#ident.value()? });
-            selected_matches
-                .push(quote! { i if i == #idx => self.#ident.input(theinput.clone()), });
-            render_calls.push(quote! {
+            let field = quote! { pub #ident: ::reformy_core::Filtext<#ty> };
+            let init = quote! { #ident: ::reformy_core::Filtext::new() };
+            let to_fields = quote! { #ident: self.#ident.value()? };
+            let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
+            let render = quote! {
                 {
                     let chunk = chunks[#idx + 1];
                     let cols = ratatui::layout::Layout::default()
@@ -575,12 +580,21 @@ fn generate_struct_form(
                     label.render_ref(cols[0], buf);
                     self.#ident.input.render(cols[1], buf);
                 }
-            });
-            height_exprs.push(quote! { 1 });
+            };
+            let height = quote! { 1 };
+            fields.push(StructField {field, height, init, build: to_fields, input, render});
         }
     }
 
     let field_count = named_fields.len();
+
+    let struct_fields: Vec<_> = fields.iter().map(|i|i.field.clone()).collect();
+    let height_exprs: Vec<_> = fields.iter().map(|i|i.height.clone()).collect();
+    let field_inits: Vec<_> = fields.iter().map(|i|i.init.clone()).collect();
+    let to_struct_fields: Vec<_> = fields.iter().map(|i|i.build.clone()).collect();
+    let selected_matches: Vec<_> = fields.iter().map(|i|i.input.clone()).collect();
+    let render_calls: Vec<_> = fields.iter().map(|i|i.render.clone()).collect();
+
 
     quote! {
         pub struct #form_name {
