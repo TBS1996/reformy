@@ -22,6 +22,7 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
 struct VariantInfo {
     field: proc_macro2::TokenStream,
     heights: proc_macro2::TokenStream,
+    input: proc_macro2::TokenStream,
 }
 
 fn generate_enum_form(
@@ -33,7 +34,6 @@ fn generate_enum_form(
 
     let mut variant_inits = Vec::new();        // init code for those fields
     let mut build_matches = Vec::new();        // build() match arms
-    let mut input_matches = Vec::new();        // input() match arms
     let mut render_matches = Vec::new();       // render() match arms
     let mut variant_display = Vec::new();      // display names
     let mut variant_titles = Vec::new();       // for label rendering
@@ -49,20 +49,19 @@ fn generate_enum_form(
                 let heights = quote! {
                     #idx => 0,
                 };
-                fields.push(VariantInfo {field: variant_field, heights});
               
 
                 variant_inits.push(quote! { #v_snake: () });
-
-
 
                 build_matches.push(quote! {
                     #idx => Some(#name::#v_ident),
                 });
 
-                input_matches.push(quote! {
+                let input = quote! {
                     #idx => false,
-                });
+                };
+                
+                fields.push(VariantInfo {field: variant_field, heights, input});
 
                 render_matches.push(quote! {
                     #idx => {}
@@ -82,7 +81,6 @@ fn generate_enum_form(
                     #idx => 1,
                 };
 
-                fields.push(VariantInfo {field, heights});
                 
 
                 variant_titles.push(quote! {
@@ -144,9 +142,11 @@ fn generate_enum_form(
                     #idx => self.#v_snake.build(),
                 });
 
-                input_matches.push(quote! {
+                let input = quote! {
                     #idx => self.#v_snake.input(input.clone()),
-                });
+                };
+
+                fields.push(VariantInfo {field, heights, input});
 
                 render_matches.push(quote! {
                     #idx => self.#v_snake.render(area, buf, &mut state.clone()),
@@ -176,7 +176,6 @@ fn generate_enum_form(
                     #idx => #field_count,
                 };
 
-                fields.push(VariantInfo {field, heights});
 
                 let field_types: Vec<_> = fields_named.named.iter()
                     .map(|f| &f.ty)
@@ -298,9 +297,11 @@ fn generate_enum_form(
                     #idx => self.#v_snake.build(),
                 });
 
-                input_matches.push(quote! {
+                let input = quote! {
                     #idx => self.#v_snake.input(input.clone()),
-                });
+                };
+
+                fields.push(VariantInfo {field, heights, input});
 
                 render_matches.push(quote! {
                     #idx => self.#v_snake.render(area, buf, &mut state.clone()),
@@ -321,6 +322,7 @@ fn generate_enum_form(
 
     let variant_fields: Vec<_> = fields.iter().map(|info|info.field.clone()).collect();
     let form_heights: Vec<_> = fields.iter().map(|info|info.heights.clone()).collect();
+    let input_matches: Vec<_> = fields.iter().map(|info|info.input.clone()).collect();
 
     let num_variants = variant_display.len();
 
