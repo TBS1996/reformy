@@ -33,9 +33,9 @@ struct User {
     age: usize,
     #[form(nested)]
     role: Role,
-    //   email: Email,
-    //    #[form(nested)]
-    //   address: Address,
+    email: Email,
+    #[form(nested)]
+    address: Address,
 }
 
 #[derive(Debug, Default, FormRenderable)]

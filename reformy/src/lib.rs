@@ -122,10 +122,10 @@ fn extract_unnamed(
                     .split(chunks[0]);
 
                 let label = if *state {
-                    ratatui::widgets::Paragraph::new(format!("> {}", stringify!(#v_snake)))
+                    ratatui::widgets::Paragraph::new(format!("> {}", stringify!(value)))
                         .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
                 } else {
-                    ratatui::widgets::Paragraph::new(stringify!(#v_snake))
+                    ratatui::widgets::Paragraph::new(stringify!(value))
                 };
 
                 label.render_ref(cols[0], buf);
@@ -402,7 +402,7 @@ fn generate_enum_form(
                 (match index {
                     #(#form_heights)*
                     _ => 0,
-                } + 1) as u16
+                } + 2) as u16
             }
 
             pub fn input(&mut self, input: tui_textarea::Input) -> bool {
@@ -441,9 +441,9 @@ fn generate_enum_form(
                 };
 
                 let title = if state {
-                    format!(">[{}]", label)
+                    format!(">{}: ", label)
                 } else {
-                    format!("[{}]", label)
+                    format!("{}: ", label)
                 };
 
                 let chunks = ratatui::layout::Layout::default()
@@ -451,7 +451,14 @@ fn generate_enum_form(
                     .constraints(vec![Constraint::Length(1), Constraint::Min(0)])
                     .split(area);
 
-                ratatui::widgets::Paragraph::new(title).render_ref(chunks[0], buf);
+                ratatui::widgets::Paragraph::new(format!("[{}]", label)).render_ref(chunks[0], buf);
+
+                let area = chunks[1];
+
+                let chunks = ratatui::layout::Layout::default()
+                    .direction(ratatui::layout::Direction::Horizontal)
+                    .constraints(vec![Constraint::Length(2), Constraint::Min(0)])
+                    .split(area);
 
                 let area = chunks[1];
 
@@ -503,6 +510,94 @@ struct StructField {
     render: proc_macro2::TokenStream,
 }
 
+fn extract_field(idx: usize, field: &Field) -> StructField {
+    let ident = field.ident.as_ref().unwrap();
+    let ty = &field.ty;
+
+    if is_nested_field(field) {
+        let nested_form =
+            format_ident!("{}Form", ty.to_token_stream().to_string().replace(' ', ""));
+
+        let field = quote! { pub #ident: #nested_form };
+
+
+        let init = quote! { #ident: #nested_form::new() };
+        let to_fields = quote! { #ident: self.#ident.build()? };
+        let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
+        let height = quote! { self.#ident.form_height() };
+        let label_text = format!("{}:", stringify!(#ident));
+        let label_length = label_text.len() as u16 + 3;
+
+        let render = quote! {
+            {
+                let chunk = chunks[#idx];
+                let cols = ratatui::layout::Layout::default()
+                    .direction(ratatui::layout::Direction::Vertical)
+                    .constraints([
+                        ratatui::layout::Constraint::Length(1),
+                        ratatui::layout::Constraint::Min(0)
+                    ])
+                    .split(chunk);
+
+                let label = if self.selected == #idx && *state {
+                    ratatui::widgets::Paragraph::new(format!("> {}:", stringify!(#ident)))
+                        .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
+                } else {
+                    ratatui::widgets::Paragraph::new(format!("{}:", stringify!(#ident)))
+                };
+
+                label.render_ref(cols[0], buf);
+
+                let cols = ratatui::layout::Layout::default()
+                    .direction(ratatui::layout::Direction::Horizontal)
+                    .constraints([
+                        ratatui::layout::Constraint::Length(4),
+                        ratatui::layout::Constraint::Min(0)
+                    ])
+                    .split(cols[1]);
+
+                ratatui::widgets::StatefulWidgetRef::render_ref(
+                    &self.#ident,
+                    cols[1],
+                    buf,
+                    &mut (self.selected == #idx && *state),
+                );
+            }
+        };
+
+        StructField {field, height, init, build: to_fields, input, render}
+    } else {
+        let field = quote! { pub #ident: ::reformy_core::Filtext<#ty> };
+        let init = quote! { #ident: ::reformy_core::Filtext::new() };
+        let to_fields = quote! { #ident: self.#ident.value()? };
+        let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
+        let render = quote! {
+            {
+                let chunk = chunks[#idx];
+                let cols = ratatui::layout::Layout::default()
+                    .direction(ratatui::layout::Direction::Horizontal)
+                    .constraints([
+                        ratatui::layout::Constraint::Length(12),
+                        ratatui::layout::Constraint::Min(0)
+                    ])
+                    .split(chunk);
+
+                let label = if self.selected == #idx && *state {
+                    ratatui::widgets::Paragraph::new(format!("> {}", stringify!(#ident)))
+                        .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
+                } else {
+                    ratatui::widgets::Paragraph::new(stringify!(#ident))
+                };
+
+                label.render_ref(cols[0], buf);
+                self.#ident.input.render(cols[1], buf);
+            }
+        };
+        let height = quote! { 1 };
+        StructField {field, height, init, build: to_fields, input, render}
+    }
+}
+
 fn generate_struct_form(
     name: &syn::Ident,
     form_name: &syn::Ident,
@@ -520,70 +615,7 @@ fn generate_struct_form(
     let mut fields: Vec<StructField> = vec![];
 
     for (idx, field) in named_fields.iter().enumerate() {
-        let ident = field.ident.as_ref().unwrap();
-        let ty = &field.ty;
-
-        if is_nested_field(field) {
-            let nested_form =
-                format_ident!("{}Form", ty.to_token_stream().to_string().replace(' ', ""));
-
-            let field = quote! { pub #ident: #nested_form };
-
-
-            let init = quote! { #ident: #nested_form::new() };
-            let to_fields = quote! { #ident: self.#ident.build()? };
-            let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
-            let render = quote! {
-                {
-                    let chunk = chunks[#idx + 1];
-                    let cols = ratatui::layout::Layout::default()
-                        .direction(ratatui::layout::Direction::Horizontal)
-                        .constraints([
-                            ratatui::layout::Constraint::Length(4),
-                            ratatui::layout::Constraint::Min(0)
-                        ])
-                        .split(chunk);
-
-                    ratatui::widgets::StatefulWidgetRef::render_ref(
-                        &self.#ident,
-                        cols[1],
-                        buf,
-                        &mut (self.selected == #idx && *state),
-                    );
-                }
-            };
-            let height = quote! { self.#ident.form_height() };
-            fields.push(StructField {field, height, init, build: to_fields, input, render});
-        } else {
-            let field = quote! { pub #ident: ::reformy_core::Filtext<#ty> };
-            let init = quote! { #ident: ::reformy_core::Filtext::new() };
-            let to_fields = quote! { #ident: self.#ident.value()? };
-            let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
-            let render = quote! {
-                {
-                    let chunk = chunks[#idx + 1];
-                    let cols = ratatui::layout::Layout::default()
-                        .direction(ratatui::layout::Direction::Horizontal)
-                        .constraints([
-                            ratatui::layout::Constraint::Length(12),
-                            ratatui::layout::Constraint::Min(0)
-                        ])
-                        .split(chunk);
-
-                    let label = if self.selected == #idx && *state {
-                        ratatui::widgets::Paragraph::new(format!("> {}", stringify!(#ident)))
-                            .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
-                    } else {
-                        ratatui::widgets::Paragraph::new(stringify!(#ident))
-                    };
-
-                    label.render_ref(cols[0], buf);
-                    self.#ident.input.render(cols[1], buf);
-                }
-            };
-            let height = quote! { 1 };
-            fields.push(StructField {field, height, init, build: to_fields, input, render});
-        }
+        fields.push(extract_field(idx, field));
     }
 
     let field_count = named_fields.len();
@@ -660,12 +692,11 @@ fn generate_struct_form(
 
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints(vec![Constraint::Length(1), #(Constraint::Length(#height_exprs)),*])
+                    .constraints(vec![#(Constraint::Length(#height_exprs)),*])
                     .split(area);
 
                 let title = ratatui::widgets::Paragraph::new(stringify!(#name).to_string() + ":")
     .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
-                title.render_ref(chunks[0], buf);
 
                 #(#render_calls)*
             }

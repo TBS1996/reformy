@@ -39,12 +39,15 @@ struct User {
     age: usize,
     #[form(nested)]
     role: Role,
+    email: Email,
+    #[form(nested)]
+    address: Address,
 }
 #[automatically_derived]
 impl ::core::fmt::Debug for User {
     #[inline]
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        ::core::fmt::Formatter::debug_struct_field3_finish(
+        ::core::fmt::Formatter::debug_struct_field5_finish(
             f,
             "User",
             "name",
@@ -52,7 +55,11 @@ impl ::core::fmt::Debug for User {
             "age",
             &self.age,
             "role",
-            &&self.role,
+            &self.role,
+            "email",
+            &self.email,
+            "address",
+            &&self.address,
         )
     }
 }
@@ -64,10 +71,17 @@ impl ::core::default::Default for User {
             name: ::core::default::Default::default(),
             age: ::core::default::Default::default(),
             role: ::core::default::Default::default(),
+            email: ::core::default::Default::default(),
+            address: ::core::default::Default::default(),
         }
     }
 }
 pub struct UserForm {
+    pub name: ::reformy_core::Filtext<String>,
+    pub age: ::reformy_core::Filtext<usize>,
+    pub role: RoleForm,
+    pub email: ::reformy_core::Filtext<Email>,
+    pub address: AddressForm,
     pub selected: usize,
 }
 impl UserForm {
@@ -76,11 +90,13 @@ impl UserForm {
             name: ::reformy_core::Filtext::new(),
             age: ::reformy_core::Filtext::new(),
             role: RoleForm::new(),
+            email: ::reformy_core::Filtext::new(),
+            address: AddressForm::new(),
             selected: 0,
         }
     }
     pub fn form_height(&self) -> u16 {
-        0 + 1 + 1 + self.role.form_height() + 1
+        0 + 1 + 1 + self.role.form_height() + 1 + self.address.form_height() + 1
     }
     pub fn input(&mut self, input: tui_textarea::Input) -> bool {
         let theinput = input.clone();
@@ -88,13 +104,15 @@ impl UserForm {
             i if i == 0usize => self.name.input(theinput.clone()),
             i if i == 1usize => self.age.input(theinput.clone()),
             i if i == 2usize => self.role.input(theinput.clone()),
+            i if i == 3usize => self.email.input(theinput.clone()),
+            i if i == 4usize => self.address.input(theinput.clone()),
             _ => ::core::panicking::panic("internal error: entered unreachable code"),
         };
         if handled {
             return true;
         }
         match input.key {
-            tui_textarea::Key::Down if self.selected < 3usize - 1 => {
+            tui_textarea::Key::Down if self.selected < 5usize - 1 => {
                 self.selected += 1;
                 true
             }
@@ -110,6 +128,8 @@ impl UserForm {
             name: self.name.value()?,
             age: self.age.value()?,
             role: self.role.build()?,
+            email: self.email.value()?,
+            address: self.address.build()?,
         })
     }
 }
@@ -140,8 +160,9 @@ impl ratatui::widgets::StatefulWidgetRef for UserForm {
                     ::alloc::boxed::Box::new([
                         Constraint::Length(1),
                         Constraint::Length(1),
-                        Constraint::Length(1),
                         Constraint::Length(self.role.form_height()),
+                        Constraint::Length(1),
+                        Constraint::Length(self.address.form_height()),
                     ]),
                 ),
             )
@@ -151,7 +172,6 @@ impl ratatui::widgets::StatefulWidgetRef for UserForm {
                 ratatui::style::Style::default()
                     .add_modifier(ratatui::style::Modifier::BOLD),
             );
-        title.render_ref(chunks[0], buf);
         {
             let chunk = chunks[0usize + 1];
             let cols = ratatui::layout::Layout::default()
@@ -207,7 +227,7 @@ impl ratatui::widgets::StatefulWidgetRef for UserForm {
             self.age.input.render(cols[1], buf);
         }
         {
-            let chunk = chunks[2usize + 1];
+            let chunk = chunks[2usize];
             let cols = ratatui::layout::Layout::default()
                 .direction(ratatui::layout::Direction::Horizontal)
                 .constraints([
@@ -217,9 +237,53 @@ impl ratatui::widgets::StatefulWidgetRef for UserForm {
                 .split(chunk);
             ratatui::widgets::StatefulWidgetRef::render_ref(
                 &self.role,
-                cols[1],
+                cols[0],
                 buf,
                 &mut (self.selected == 2usize && *state),
+            );
+        }
+        {
+            let chunk = chunks[3usize + 1];
+            let cols = ratatui::layout::Layout::default()
+                .direction(ratatui::layout::Direction::Horizontal)
+                .constraints([
+                    ratatui::layout::Constraint::Length(12),
+                    ratatui::layout::Constraint::Min(0),
+                ])
+                .split(chunk);
+            let label = if self.selected == 3usize && *state {
+                ratatui::widgets::Paragraph::new(
+                        ::alloc::__export::must_use({
+                            let res = ::alloc::fmt::format(
+                                format_args!("> {0}", "email"),
+                            );
+                            res
+                        }),
+                    )
+                    .style(
+                        ratatui::style::Style::default()
+                            .fg(ratatui::style::Color::Yellow),
+                    )
+            } else {
+                ratatui::widgets::Paragraph::new("email")
+            };
+            label.render_ref(cols[0], buf);
+            self.email.input.render(cols[1], buf);
+        }
+        {
+            let chunk = chunks[4usize];
+            let cols = ratatui::layout::Layout::default()
+                .direction(ratatui::layout::Direction::Horizontal)
+                .constraints([
+                    ratatui::layout::Constraint::Length(4),
+                    ratatui::layout::Constraint::Min(0),
+                ])
+                .split(chunk);
+            ratatui::widgets::StatefulWidgetRef::render_ref(
+                &self.address,
+                cols[0],
+                buf,
+                &mut (self.selected == 4usize && *state),
             );
         }
     }
@@ -263,6 +327,9 @@ impl ::core::default::Default for Address {
     }
 }
 pub struct AddressForm {
+    pub whatever: WhateverForm,
+    pub street: ::reformy_core::Filtext<String>,
+    pub number: ::reformy_core::Filtext<usize>,
     pub selected: usize,
 }
 impl AddressForm {
@@ -333,7 +400,6 @@ impl ratatui::widgets::StatefulWidgetRef for AddressForm {
                 <[_]>::into_vec(
                     #[rustc_box]
                     ::alloc::boxed::Box::new([
-                        Constraint::Length(1),
                         Constraint::Length(self.whatever.form_height()),
                         Constraint::Length(1),
                         Constraint::Length(1),
@@ -346,9 +412,8 @@ impl ratatui::widgets::StatefulWidgetRef for AddressForm {
                 ratatui::style::Style::default()
                     .add_modifier(ratatui::style::Modifier::BOLD),
             );
-        title.render_ref(chunks[0], buf);
         {
-            let chunk = chunks[0usize + 1];
+            let chunk = chunks[0usize];
             let cols = ratatui::layout::Layout::default()
                 .direction(ratatui::layout::Direction::Horizontal)
                 .constraints([
@@ -358,7 +423,7 @@ impl ratatui::widgets::StatefulWidgetRef for AddressForm {
                 .split(chunk);
             ratatui::widgets::StatefulWidgetRef::render_ref(
                 &self.whatever,
-                cols[1],
+                cols[0],
                 buf,
                 &mut (self.selected == 0usize && *state),
             );
@@ -451,6 +516,7 @@ impl ::core::default::Default for Whatever {
     }
 }
 pub struct WhateverForm {
+    pub foo: ::reformy_core::Filtext<String>,
     pub selected: usize,
 }
 impl WhateverForm {
@@ -512,10 +578,7 @@ impl ratatui::widgets::StatefulWidgetRef for WhateverForm {
             .constraints(
                 <[_]>::into_vec(
                     #[rustc_box]
-                    ::alloc::boxed::Box::new([
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                    ]),
+                    ::alloc::boxed::Box::new([Constraint::Length(1)]),
                 ),
             )
             .split(area);
@@ -524,7 +587,6 @@ impl ratatui::widgets::StatefulWidgetRef for WhateverForm {
                 ratatui::style::Style::default()
                     .add_modifier(ratatui::style::Modifier::BOLD),
             );
-        title.render_ref(chunks[0], buf);
         {
             let chunk = chunks[0usize + 1];
             let cols = ratatui::layout::Layout::default()
@@ -867,12 +929,12 @@ impl RoleForm {
         };
         let title = if state {
             ::alloc::__export::must_use({
-                let res = ::alloc::fmt::format(format_args!(">[{0}]", label));
+                let res = ::alloc::fmt::format(format_args!(">{0}: {1}", "Role", label));
                 res
             })
         } else {
             ::alloc::__export::must_use({
-                let res = ::alloc::fmt::format(format_args!("[{0}]", label));
+                let res = ::alloc::fmt::format(format_args!("{0}: {1}", "Role", label));
                 res
             })
         };
@@ -886,6 +948,16 @@ impl RoleForm {
             )
             .split(area);
         ratatui::widgets::Paragraph::new(title).render_ref(chunks[0], buf);
+        let area = chunks[1];
+        let chunks = ratatui::layout::Layout::default()
+            .direction(ratatui::layout::Direction::Horizontal)
+            .constraints(
+                <[_]>::into_vec(
+                    #[rustc_box]
+                    ::alloc::boxed::Box::new([Constraint::Length(2), Constraint::Min(0)]),
+                ),
+            )
+            .split(area);
         let area = chunks[1];
         match self.selected_variant {
             0usize => self.admin.render(area, buf, &mut state.clone()),
