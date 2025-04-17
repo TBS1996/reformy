@@ -19,12 +19,17 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     }
 }
 
+struct VariantInfo {
+    field: proc_macro2::TokenStream,
+}
+
 fn generate_enum_form(
     name: &syn::Ident,
     form_name: &syn::Ident,
     data_enum: &syn::DataEnum,
 ) -> TokenStream {
-    let mut variant_fields = Vec::new();       // fields in the enum form
+    let mut fields: Vec<VariantInfo> = vec![];
+
     let mut variant_inits = Vec::new();        // init code for those fields
     let mut build_matches = Vec::new();        // build() match arms
     let mut input_matches = Vec::new();        // input() match arms
@@ -40,7 +45,10 @@ fn generate_enum_form(
 
         match &variant.fields {
             syn::Fields::Unit => {
-                variant_fields.push(quote! { pub #v_snake: () });
+                let variant_field = quote! { pub #v_snake: () };
+                fields.push(VariantInfo {field: variant_field.into()});
+              
+
                 variant_inits.push(quote! { #v_snake: () });
 
 
@@ -57,16 +65,19 @@ fn generate_enum_form(
                 });
 
                 render_matches.push(quote! {
-                    #idx => {
-                        //let text = format!("[{}]", #variant_label);
-                        //ratatui::widgets::Paragraph::new(text).render_ref(area, buf);
-                    }
+                    #idx => {}
                 });
             }
             syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() == 1 => {
                 let form_field_type = &fields_unnamed.unnamed[0].ty;
                 let form_field_name = format_ident!("value");
                 let form_struct_name = format_ident!("{}{}Form", name, v_ident);
+                
+                let field = quote! {
+                    pub #v_snake: #form_struct_name
+                };
+
+                fields.push(VariantInfo {field: field.into()});
 
                 form_heights.push(quote! {
                     #idx => 1,
@@ -122,9 +133,6 @@ fn generate_enum_form(
                     }
                 });
 
-                variant_fields.push(quote! {
-                    pub #v_snake: #form_struct_name
-                });
 
                 variant_inits.push(quote! {
                     #v_snake: #form_struct_name::new()
@@ -144,6 +152,11 @@ fn generate_enum_form(
             }
             syn::Fields::Named(fields_named) => {
                 let form_struct_name = format_ident!("{}{}Form", name, v_ident);
+                
+                let field = quote! {
+                    pub #v_snake: #form_struct_name
+                };
+                fields.push(VariantInfo {field: field.into()});
 
                 let field_idents: Vec<_> = fields_named.named.iter()
                     .map(|f| f.ident.as_ref().unwrap())
@@ -273,9 +286,6 @@ fn generate_enum_form(
 
                 variant_titles.push(form_struct);
 
-                variant_fields.push(quote! {
-                    pub #v_snake: #form_struct_name
-                });
 
                 variant_inits.push(quote! {
                     #v_snake: #form_struct_name::new()
@@ -305,6 +315,8 @@ fn generate_enum_form(
             #idx => #variant_label,
         });
     }
+
+    let variant_fields: Vec<_> = fields.into_iter().map(|info|info.field.clone()).collect();
 
     let num_variants = variant_display.len();
 
