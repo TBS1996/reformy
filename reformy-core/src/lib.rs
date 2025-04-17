@@ -1,8 +1,4 @@
-use std::{
-    fmt::Display,
-    marker::PhantomData,
-    str::FromStr,
-};
+use std::{fmt::Display, marker::PhantomData, str::FromStr};
 
 use tui_textarea::{Input, TextArea};
 
