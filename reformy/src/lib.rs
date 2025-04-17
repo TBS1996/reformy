@@ -510,6 +510,12 @@ struct StructField {
     render: proc_macro2::TokenStream,
 }
 
+struct MyStruct {
+    name: syn::Ident,
+    variant: Option<syn::Ident>,
+    fields: Vec<StructField>,
+}
+
 fn extract_field(idx: usize, field: &Field) -> StructField {
     let ident = field.ident.as_ref().unwrap();
     let ty = &field.ty;
@@ -670,6 +676,22 @@ fn generate_struct_form(
                 }
             }
 
+            fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut bool) {
+                use ratatui::layout::{Layout, Direction, Constraint};
+                use ratatui::widgets::WidgetRef;
+
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![#(Constraint::Length(#height_exprs)),*])
+                    .split(area);
+
+                let title = ratatui::widgets::Paragraph::new(stringify!(#name).to_string() + ":")
+    .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
+
+                #(#render_calls)*
+                
+            }
+
             pub fn build(&self) -> Option<#name> {
                 Some(#name {
                     #(#to_struct_fields,)*
@@ -687,18 +709,7 @@ fn generate_struct_form(
             type State = bool;
 
             fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
-                use ratatui::layout::{Layout, Direction, Constraint};
-                use ratatui::widgets::WidgetRef;
-
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![#(Constraint::Length(#height_exprs)),*])
-                    .split(area);
-
-                let title = ratatui::widgets::Paragraph::new(stringify!(#name).to_string() + ":")
-    .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
-
-                #(#render_calls)*
+                self.render(area, buf, state)
             }
         }
 
