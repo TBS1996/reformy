@@ -174,7 +174,16 @@ fn extract_named(
     variant_label: String,
     idx: usize,
 ) -> VariantInfo {
-    let form_struct_name = format_ident!("{}{}Form", name, v_ident);
+
+    let mut fields: Vec<Field> = vec![];
+
+    for field in fields_named.clone().named {
+        fields.push(field);
+    }
+
+    let mystruct = MyStruct::new(name.clone(), Some(v_ident.clone()), fields);
+
+    let form_struct_name = mystruct.form_name();
 
     let field = quote! {
         pub #v_snake: #form_struct_name
@@ -186,121 +195,13 @@ fn extract_named(
         .map(|f| f.ident.as_ref().unwrap())
         .collect();
 
-    let field_indices: Vec<_> = (0..field_idents.len()).collect();
-    let field_input_match = field_indices.iter().zip(field_idents.iter()).map(|(i, f)| {
-        quote! {
-            i if i == #i => self.#f.input(input.clone()),
-        }
-    });
 
     let field_count = field_idents.len();
     let heights = quote! {
         #idx => #field_count,
     };
 
-    let field_types: Vec<_> = fields_named.named.iter().map(|f| &f.ty).collect();
-
-    let form_fields = field_idents.iter().zip(field_types.iter()).map(|(f, ty)| {
-        quote! {
-            pub #f: ::reformy_core::Filtext<#ty>
-        }
-    });
-
-    let field_inits = field_idents.iter().map(|f| {
-        quote! {
-            #f: ::reformy_core::Filtext::new()
-        }
-    });
-
-    let field_builds = field_idents.iter().map(|f| {
-        quote! {
-            #f: self.#f.value()?
-        }
-    });
-
-    let render_lines = field_idents.iter().enumerate().map(|(idx, f)| {
-        quote! {
-            {
-                let cols = ratatui::layout::Layout::default()
-                    .direction(ratatui::layout::Direction::Horizontal)
-                    .constraints([
-                        ratatui::layout::Constraint::Length(12),
-                        ratatui::layout::Constraint::Min(0),
-                    ])
-                    .split(chunks[#idx]);
-
-                let label = if self.selected == #idx && *state {
-                    ratatui::widgets::Paragraph::new(format!("> {}", stringify!(#f)))
-                        .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
-                } else {
-                    ratatui::widgets::Paragraph::new(stringify!(#f))
-                };
-
-                label.render_ref(cols[0], buf);
-                self.#f.input.render(cols[1], buf);
-            }
-        }
-    });
-
-    let form_struct = quote! {
-        pub struct #form_struct_name {
-            pub selected: usize,
-            #(#form_fields,)*
-        }
-
-        impl #form_struct_name {
-            pub fn new() -> Self {
-                Self {
-                    selected: 0,
-                    #(#field_inits,)*
-                }
-            }
-
-            pub fn build(&self) -> Option<#name> {
-                Some(#name::#v_ident {
-                    #(#field_builds,)*
-                })
-            }
-
-
-            pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-                let handled = match self.selected {
-                    #(#field_input_match)*
-                    _ => false,
-                };
-
-                if handled {
-                    return true;
-                }
-
-                match input.key {
-                    tui_textarea::Key::Down if self.selected < #field_count - 1 => {
-                        self.selected += 1;
-                        true
-                    }
-                    tui_textarea::Key::Up if self.selected > 0 => {
-                        self.selected -= 1;
-                        true
-                    }
-                    _ => false,
-                }
-            }
-
-
-            pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut bool) {
-                use ratatui::widgets::WidgetRef;
-                use ratatui::prelude::Constraint;
-
-                let chunks = ratatui::layout::Layout::default()
-                    .direction(ratatui::layout::Direction::Vertical)
-                    .constraints(vec![Constraint::Length(1), Constraint::Length(1), Constraint::Length(1)])
-                    .split(area);
-
-
-                #(#render_lines)*
-            }
-        }
-    };
+    let form_struct = mystruct.generate();
 
     let init = quote! {
         #v_snake: #form_struct_name::new()
@@ -534,7 +435,14 @@ impl MyStruct {
     }
 
     fn form_name(&self) -> syn::Ident {
+        match &self.variant {
+            Some(var) => {format_ident!("{}{}Form", self.name, var)
+            },
+            None => {
+                
         format_ident!("{}Form", self.name)
+            },
+        }
     }
 
     fn generate(&self) -> proc_macro2::TokenStream {
@@ -547,6 +455,13 @@ impl MyStruct {
         let field_count = struct_fields.len();
         let name = &self.name;
         let form_name = self.form_name();
+
+        let buildent = if let Some(variant) = &self.variant {
+            quote! { #name::#variant }
+        } else {
+            quote! { #name }
+        };
+
 
         quote! {
             pub struct #form_name {
@@ -607,7 +522,7 @@ impl MyStruct {
                 }
 
                 pub fn build(&self) -> Option<#name> {
-                    Some(#name {
+                    Some(#buildent {
                         #(#to_struct_fields,)*
                     })
                 }
