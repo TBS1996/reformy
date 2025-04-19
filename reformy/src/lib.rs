@@ -24,7 +24,6 @@ fn extract_unit(
     variant_label: String,
     idx: usize,
 ) -> VariantInfo {
-    let variant_field = quote! { pub #v_ident: () };
     let heights = quote! {
         #idx => 0,
     };
@@ -48,7 +47,8 @@ fn extract_unit(
     };
 
     VariantInfo {
-        field: variant_field,
+        v_ident: v_ident.clone(),
+        v_ty: quote!{()},
         height: heights,
         input,
         build,
@@ -75,10 +75,6 @@ fn extract_named(
     let mystruct = MyStruct::new(name.clone(), Some(v_ident.clone()), fields);
 
     let form_struct_name = mystruct.form_name();
-
-    let field = quote! {
-        pub #v_ident: #form_struct_name
-    };
 
     let field_idents: Vec<_> = fields_named
         .named
@@ -112,7 +108,8 @@ fn extract_named(
     };
 
     VariantInfo {
-        field,
+        v_ident: v_ident.clone(),
+        v_ty: quote! {#form_struct_name}, 
         height: heights,
         input,
         build,
@@ -233,7 +230,11 @@ impl MyEnum {
         let variant_fields: Vec<_> = self
             .variants
             .iter()
-            .map(|info| info.field.clone())
+            .map(|info| {
+                let ident = &info.v_ident;
+                let ty = &info.v_ty;
+                quote! { pub #ident: #ty  }
+            })
             .collect();
         let form_heights: Vec<_> = self
             .variants
@@ -369,7 +370,8 @@ impl MyEnum {
 
 /// A single variant in an enum
 struct VariantInfo {
-    field: proc_macro2::TokenStream,
+    v_ident: syn::Ident,
+    v_ty: proc_macro2::TokenStream,
     height: proc_macro2::TokenStream,
     input: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
