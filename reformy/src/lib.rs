@@ -313,8 +313,10 @@ struct VariantInfo {
     display: proc_macro2::TokenStream,
 }
 
+/// A single field in a struct-like object. 
 struct StructField {
-    field: proc_macro2::TokenStream,
+    field: syn::Ident,
+    field_ty: proc_macro2::TokenStream,
     height: proc_macro2::TokenStream,
     input: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
@@ -361,7 +363,13 @@ impl MyStruct {
             return quote!{}.into();
         }
 
-        let struct_fields: Vec<_> = self.fields.iter().map(|i| i.field.clone()).collect();
+        let struct_fields: Vec<_> = self.fields.iter().map(|i| {
+            let name = i.field.clone();
+            let ty = i.field_ty.clone();
+
+            quote! { pub #name: #ty }
+
+        }).collect();
         let height_exprs: Vec<_> = self.fields.iter().map(|i| i.height.clone()).collect();
         let field_inits: Vec<_> = self.fields.iter().map(|i| i.init.clone()).collect();
         let to_struct_fields: Vec<_> = self.fields.iter().map(|i| i.build.clone()).collect();
@@ -454,8 +462,6 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         let nested_form =
             format_ident!("{}Form", ty.to_token_stream().to_string().replace(' ', ""));
 
-        let field = quote! { pub #ident: #nested_form };
-
         let init = quote! { #ident: #nested_form::new() };
         let to_fields = quote! { #ident: self.#ident.build()? };
         let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
@@ -499,7 +505,8 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         };
 
         StructField {
-            field,
+            field: ident.clone(),
+            field_ty: quote! { #nested_form },
             height,
             init,
             build: to_fields,
@@ -507,7 +514,6 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
             render,
         }
     } else {
-        let field = quote! { pub #ident: ::reformy_core::Filtext<#ty> };
         let init = quote! { #ident: ::reformy_core::Filtext::new() };
         let to_fields = quote! { #ident: self.#ident.value()? };
         let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
@@ -535,7 +541,8 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         };
         let height = quote! { 1 };
         StructField {
-            field,
+            field: ident.clone(),
+            field_ty: quote! { ::reformy_core::Filtext::<#ty> },
             height,
             init,
             build: to_fields,
