@@ -22,25 +22,14 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
 
 fn extract_unit(
     v_ident: &syn::Ident,
-    idx: usize,
 ) -> VariantInfo {
     let init = quote! { #v_ident: () };
-
-    let input = quote! {
-        #idx => false,
-    };
-
-    let render = quote! {
-        #idx => {}
-    };
 
     VariantInfo {
         v_ident: v_ident.clone(),
         v_ty: parse_str("()").unwrap(),
         height: 0,
-        input,
         init,
-        render,
         titles: None,
     }
 }
@@ -49,7 +38,6 @@ fn extract_named(
     fields_named: FieldsNamed,
     name: &syn::Ident,
     v_ident: &syn::Ident,
-    idx: usize,
 ) -> VariantInfo {
     let mut fields: Vec<Field> = vec![];
 
@@ -73,32 +61,22 @@ fn extract_named(
         #v_ident: #form_struct_name::new()
     };
 
-    let input = quote! {
-        #idx => self.#v_ident.input(input.clone()),
-    };
-
-    let render = quote! {
-        #idx => self.#v_ident.render(area, buf, state.clone()),
-    };
-
 
     VariantInfo {
         v_ident: v_ident.clone(),
         v_ty: form_struct_name,
         height: field_count,
-        input,
         init,
-        render,
         titles: Some(mystruct),
     }
 }
 
-fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantInfo {
+fn extract_variant(name: &syn::Ident, variant: Variant) -> VariantInfo {
     let v_ident = &variant.ident;
     match variant.fields {
-        syn::Fields::Unit => extract_unit(v_ident, idx),
+        syn::Fields::Unit => extract_unit(v_ident),
         syn::Fields::Named(fields_named) => {
-            extract_named(fields_named, name, v_ident, idx)
+            extract_named(fields_named, name, v_ident)
         }
 
         _ => {
@@ -115,8 +93,8 @@ fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantIn
 fn generate_enum_form(name: &syn::Ident, data_enum: syn::DataEnum) -> MyObject {
     let mut fields: Vec<VariantInfo> = vec![];
 
-    for (idx, variant) in data_enum.variants.into_iter().enumerate() {
-        fields.push(extract_variant(name, variant, idx));
+    for variant in data_enum.variants.into_iter() {
+        fields.push(extract_variant(name, variant));
     }
 
     let myenum = MyEnum {
@@ -221,10 +199,26 @@ impl MyEnum {
                 
             })
             .collect();
+        
         let input_matches: Vec<_> = self
             .variants
             .iter()
-            .map(|info| info.input.clone())
+            .enumerate()
+            .map(|(idx, info)| {
+                let ident = &info.v_ident;
+
+                if info.titles.is_some() {
+                    quote! {
+                        #idx => self.#ident.input(input.clone()),
+                    }
+                } else {
+                    quote! {
+                        #idx => false,
+                    }
+                }
+
+                
+            })
             .collect();
         let build_matches: Vec<_> = self
             .variants
@@ -247,7 +241,22 @@ impl MyEnum {
         let render_matches: Vec<_> = self
             .variants
             .iter()
-            .map(|info| info.render.clone())
+            .enumerate()
+            .map(|(idx, info)| {
+                
+                let ident = &info.v_ident;
+
+                if info.titles.is_some() {
+                    quote! {
+                        #idx => self.#ident.render(area, buf, state.clone()),
+                    }
+                } else {
+                    quote! {
+                        #idx => {},
+                    }
+                }
+                
+            })
             .collect();
         let variant_titles: Vec<_> = self
             .variants
@@ -369,9 +378,7 @@ struct VariantInfo {
     v_ident: syn::Ident,
     v_ty: syn::Type,
     height: usize,
-    input: proc_macro2::TokenStream,
     init: proc_macro2::TokenStream,
-    render: proc_macro2::TokenStream,
     /// The fields if it's a data enum, none if it's unit
     titles: Option<MyStruct>,
 }
