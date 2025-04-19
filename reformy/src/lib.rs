@@ -22,7 +22,6 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
 
 fn extract_unit(
     v_ident: &syn::Ident,
-    variant_label: String,
     idx: usize,
 ) -> VariantInfo {
     let init = quote! { #v_ident: () };
@@ -35,10 +34,6 @@ fn extract_unit(
         #idx => {}
     };
 
-    let display = quote! {
-        #idx => #variant_label,
-    };
-
     VariantInfo {
         v_ident: v_ident.clone(),
         v_ty: parse_str("()").unwrap(),
@@ -47,7 +42,6 @@ fn extract_unit(
         init,
         render,
         titles: None,
-        display,
     }
 }
 
@@ -55,7 +49,6 @@ fn extract_named(
     fields_named: FieldsNamed,
     name: &syn::Ident,
     v_ident: &syn::Ident,
-    variant_label: String,
     idx: usize,
 ) -> VariantInfo {
     let mut fields: Vec<Field> = vec![];
@@ -88,9 +81,6 @@ fn extract_named(
         #idx => self.#v_ident.render(area, buf, state.clone()),
     };
 
-    let display = quote! {
-        #idx => #variant_label,
-    };
 
     VariantInfo {
         v_ident: v_ident.clone(),
@@ -100,18 +90,15 @@ fn extract_named(
         init,
         render,
         titles: Some(mystruct),
-        display,
     }
 }
 
 fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantInfo {
     let v_ident = &variant.ident;
-    let variant_label = v_ident.to_string();
-
     match variant.fields {
-        syn::Fields::Unit => extract_unit(v_ident, variant_label, idx),
+        syn::Fields::Unit => extract_unit(v_ident, idx),
         syn::Fields::Named(fields_named) => {
-            extract_named(fields_named, name, v_ident, variant_label, idx)
+            extract_named(fields_named, name, v_ident, idx)
         }
 
         _ => {
@@ -275,7 +262,11 @@ impl MyEnum {
         let variant_display: Vec<_> = self
             .variants
             .iter()
-            .map(|info| info.display.clone())
+            .enumerate()
+            .map(|(idx, info)| {
+                let label = info.v_ident.to_string();
+                quote!(#idx => #label,)
+            })
             .collect();
 
         let num_variants = variant_display.len();
@@ -383,7 +374,6 @@ struct VariantInfo {
     render: proc_macro2::TokenStream,
     /// The fields if it's a data enum, none if it's unit
     titles: Option<MyStruct>,
-    display: proc_macro2::TokenStream,
 }
 
 /// A single field in a struct-like object.
