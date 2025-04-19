@@ -180,7 +180,10 @@ impl MyEnum {
         
     let variant_fields: Vec<_> = self.variants.iter().map(|info| info.field.clone()).collect();
     let form_heights: Vec<_> = self.variants.iter().map(|info| info.height.clone()).collect();
-    let input_matches: Vec<_> = self.variants.iter().map(|info| info.input.clone()).collect();
+    let input_matches: Vec<_> = self.variants.iter().map(|info| {
+        info.input.clone()
+        
+    }).collect();
     let build_matches: Vec<_> = self.variants.iter().map(|info| info.build.clone()).collect();
     let variant_inits: Vec<_> = self.variants.iter().map(|info| info.init.clone()).collect();
     let render_matches: Vec<_> = self.variants.iter().map(|info| info.render.clone()).collect();
@@ -318,7 +321,6 @@ struct StructField {
     field: syn::Ident,
     field_ty: proc_macro2::TokenStream,
     height: proc_macro2::TokenStream,
-    input: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
     render: proc_macro2::TokenStream,
 }
@@ -376,7 +378,13 @@ impl MyStruct {
             quote! { #field: #ty::new() }
         }).collect();
         let to_struct_fields: Vec<_> = self.fields.iter().map(|i| i.build.clone()).collect();
-        let selected_matches: Vec<_> = self.fields.iter().map(|i| i.input.clone()).collect();
+        let selected_matches: Vec<_> = self.fields.iter().enumerate().map(|(idx, i)| {
+
+            let ident = i.field.clone();
+           
+        quote! { i if i == #idx => self.#ident.input(theinput.clone()), }
+        }
+        ).collect();
         let render_calls: Vec<_> = self.fields.iter().map(|i| i.render.clone()).collect();
         let field_count = struct_fields.len();
         let name = &self.name;
@@ -466,7 +474,6 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
             format_ident!("{}Form", ty.to_token_stream().to_string().replace(' ', ""));
 
         let to_fields = quote! { #ident: self.#ident.build()? };
-        let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
         let height = quote! { self.#ident.form_height() };
 
         let render = quote! {
@@ -511,12 +518,10 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
             field_ty: quote! { #nested_form },
             height,
             build: to_fields,
-            input,
             render,
         }
     } else {
         let to_fields = quote! { #ident: self.#ident.value()? };
-        let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
         let render = quote! {
             {
                 let chunk = chunks[#idx];
@@ -545,7 +550,6 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
             field_ty: quote! { ::reformy_core::Filtext::<#ty> },
             height,
             build: to_fields,
-            input,
             render,
         }
     }
