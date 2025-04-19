@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
-use syn::{DeriveInput, Field, FieldsNamed, FieldsUnnamed, Variant, parse_macro_input};
+use syn::{DeriveInput, Field, FieldsNamed, Variant, parse_macro_input};
 
 #[proc_macro_derive(FormRenderable, attributes(form))]
 pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
@@ -53,108 +53,6 @@ fn extract_unit(
 
     VariantInfo {
         field: variant_field,
-        height: heights,
-        input,
-        build,
-        init,
-        render,
-        titles,
-        display,
-    }
-}
-
-fn extract_unnamed(
-    fields_unnamed: &FieldsUnnamed,
-    name: &syn::Ident,
-    v_ident: &syn::Ident,
-    v_snake: &syn::Ident,
-    variant_label: String,
-    idx: usize,
-) -> VariantInfo {
-    let form_field_type = &fields_unnamed.unnamed[0].ty;
-    let form_field_name = format_ident!("value");
-    let form_struct_name = format_ident!("{}{}Form", name, v_ident);
-
-    let field = quote! {
-        pub #v_snake: #form_struct_name
-    };
-
-    let heights = quote! {
-        #idx => 1,
-    };
-
-    let titles = quote! {
-        pub struct #form_struct_name {
-            pub #form_field_name: ::reformy_core::Filtext<#form_field_type>
-        }
-
-        impl #form_struct_name {
-            pub fn new() -> Self {
-                Self {
-                    #form_field_name: ::reformy_core::Filtext::new(),
-                }
-            }
-
-            pub fn build(&self) -> Option<#name> {
-                Some(#name::#v_ident(self.#form_field_name.value()?))
-            }
-
-            pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-                self.#form_field_name.input(input)
-            }
-
-            pub fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut bool) {
-                use ratatui::widgets::WidgetRef;
-                use ratatui::prelude::Constraint;
-
-                let chunks = ratatui::layout::Layout::default()
-                    .direction(ratatui::layout::Direction::Vertical)
-                    .constraints(vec![Constraint::Length(1)])
-                    .split(area);
-
-                let cols = ratatui::layout::Layout::default()
-                    .direction(ratatui::layout::Direction::Horizontal)
-                    .constraints([
-                        ratatui::layout::Constraint::Length(12),
-                        ratatui::layout::Constraint::Min(0),
-                    ])
-                    .split(chunks[0]);
-
-                let label = if *state {
-                    ratatui::widgets::Paragraph::new(format!("> {}", stringify!(value)))
-                        .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
-                } else {
-                    ratatui::widgets::Paragraph::new(stringify!(value))
-                };
-
-                label.render_ref(cols[0], buf);
-                self.#form_field_name.input.render(cols[1], buf);
-            }
-        }
-    };
-
-    let init = quote! {
-        #v_snake: #form_struct_name::new()
-    };
-
-    let build = quote! {
-        #idx => self.#v_snake.build(),
-    };
-
-    let input = quote! {
-        #idx => self.#v_snake.input(input.clone()),
-    };
-
-    let render = quote! {
-        #idx => self.#v_snake.render(area, buf, &mut state.clone()),
-    };
-
-    let display = quote! {
-        #idx => #variant_label,
-    };
-
-    VariantInfo {
-        field,
         height: heights,
         input,
         build,
@@ -242,9 +140,6 @@ fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantIn
 
     match variant.fields {
         syn::Fields::Unit => extract_unit(name, v_ident, &v_snake, variant_label, idx),
-        syn::Fields::Unnamed(fields_unnamed) if fields_unnamed.unnamed.len() == 1 => {
-            extract_unnamed(&fields_unnamed, name, v_ident, &v_snake, variant_label, idx)
-        }
         syn::Fields::Named(fields_named) => {
             extract_named(fields_named, name, v_ident, &v_snake, variant_label, idx)
         }
