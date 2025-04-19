@@ -382,10 +382,16 @@ impl VariantInfo {
     }
 }
 
+#[derive(Clone, Debug)]
+struct FieldType {
+    ty: syn::Type,
+    is_leaf: bool,
+}
+
 /// A single field in a struct-like object.
 struct StructField {
     field: syn::Ident,
-    field_ty: syn::Type,
+    field_ty: FieldType,
     height: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
     render: proc_macro2::TokenStream,
@@ -440,7 +446,7 @@ impl MyStruct {
             .iter()
             .map(|i| {
                 let name = i.field.clone();
-                let ty = i.field_ty.clone();
+                let ty = i.field_ty.ty.clone();
 
                 quote! { pub #name: #ty }
             })
@@ -451,7 +457,7 @@ impl MyStruct {
             .iter()
             .map(|i| {
                 let field = i.field.clone();
-                let ty = i.field_ty.clone();
+                let ty = i.field_ty.ty.clone();
                 quote! { #field: #ty::new() }
             })
             .collect();
@@ -598,7 +604,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
 
         StructField {
             field: ident.clone(),
-            field_ty: ty,
+            field_ty: FieldType { ty, is_leaf: false },
             height,
             build: to_fields,
             render,
@@ -630,7 +636,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         let height = quote! { 1 };
         StructField {
             field: ident.clone(),
-            field_ty: parse2(quote! {::reformy_core::Filtext::<#ty>}).unwrap(),
+            field_ty: FieldType {ty: parse2(quote! {::reformy_core::Filtext::<#ty>}).unwrap(), is_leaf: true},
             height,
             build: to_fields,
             render,
