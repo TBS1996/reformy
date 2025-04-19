@@ -53,7 +53,7 @@ struct Whatever {
 
 #[derive(Debug, Default, FormRenderable)]
 enum Role {
-    Admin(String),
+    Admin,
     Guest {
         name: String,
         cool: String,

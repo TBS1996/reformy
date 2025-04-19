@@ -45,8 +45,6 @@ fn extract_unit(
         #idx => {}
     };
 
-    let titles = quote! {};
-
     let display = quote! {
         #idx => #variant_label,
     };
@@ -58,7 +56,7 @@ fn extract_unit(
         build,
         init,
         render,
-        titles,
+        titles: None,
         display,
     }
 }
@@ -99,8 +97,6 @@ fn extract_named(
         #idx => #field_count,
     };
 
-    let form_struct = mystruct.generate();
-
     let init = quote! {
         #v_snake: #form_struct_name::new()
     };
@@ -128,7 +124,7 @@ fn extract_named(
         build,
         init,
         render,
-        titles: form_struct,
+        titles: Some(mystruct),
         display,
     }
 }
@@ -172,7 +168,7 @@ fn generate_enum_form(
     let build_matches: Vec<_> = fields.iter().map(|info| info.build.clone()).collect();
     let variant_inits: Vec<_> = fields.iter().map(|info| info.init.clone()).collect();
     let render_matches: Vec<_> = fields.iter().map(|info| info.render.clone()).collect();
-    let variant_titles: Vec<_> = fields.iter().map(|info| info.titles.clone()).collect();
+    let variant_titles: Vec<_> = fields.iter().map(|info| info.titles.as_ref().map(|mys|mys.generate()).unwrap_or_default()).collect();
     let variant_display: Vec<_> = fields.iter().map(|info| info.display.clone()).collect();
 
     let num_variants = variant_display.len();
@@ -286,6 +282,12 @@ fn generate_enum_form(
     }.into()
 }
 
+struct MyEnum {
+    name: syn::Ident,
+    variants: Vec<VariantInfo>,
+}
+
+/// A single variant in an enum
 struct VariantInfo {
     field: proc_macro2::TokenStream,
     height: proc_macro2::TokenStream,
@@ -293,7 +295,7 @@ struct VariantInfo {
     build: proc_macro2::TokenStream,
     init: proc_macro2::TokenStream,
     render: proc_macro2::TokenStream,
-    titles: proc_macro2::TokenStream,
+    titles: Option<MyStruct>,
     display: proc_macro2::TokenStream,
 }
 
@@ -341,6 +343,10 @@ impl MyStruct {
     }
 
     fn generate(&self) -> proc_macro2::TokenStream {
+        if self.fields.is_empty() {
+            return quote!{}.into();
+        }
+
         let struct_fields: Vec<_> = self.fields.iter().map(|i| i.field.clone()).collect();
         let height_exprs: Vec<_> = self.fields.iter().map(|i| i.height.clone()).collect();
         let field_inits: Vec<_> = self.fields.iter().map(|i| i.init.clone()).collect();
