@@ -21,16 +21,15 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
 fn extract_unit(
     name: &syn::Ident,
     v_ident: &syn::Ident,
-    v_snake: &syn::Ident,
     variant_label: String,
     idx: usize,
 ) -> VariantInfo {
-    let variant_field = quote! { pub #v_snake: () };
+    let variant_field = quote! { pub #v_ident: () };
     let heights = quote! {
         #idx => 0,
     };
 
-    let init = quote! { #v_snake: () };
+    let init = quote! { #v_ident: () };
 
     let build = quote! {
         #idx => Some(#name::#v_ident),
@@ -64,7 +63,6 @@ fn extract_named(
     fields_named: FieldsNamed,
     name: &syn::Ident,
     v_ident: &syn::Ident,
-    v_snake: &syn::Ident,
     variant_label: String,
     idx: usize,
 ) -> VariantInfo {
@@ -79,7 +77,7 @@ fn extract_named(
     let form_struct_name = mystruct.form_name();
 
     let field = quote! {
-        pub #v_snake: #form_struct_name
+        pub #v_ident: #form_struct_name
     };
 
     let field_idents: Vec<_> = fields_named
@@ -94,19 +92,19 @@ fn extract_named(
     };
 
     let init = quote! {
-        #v_snake: #form_struct_name::new()
+        #v_ident: #form_struct_name::new()
     };
 
     let build = quote! {
-        #idx => self.#v_snake.build(),
+        #idx => self.#v_ident.build(),
     };
 
     let input = quote! {
-        #idx => self.#v_snake.input(input.clone()),
+        #idx => self.#v_ident.input(input.clone()),
     };
 
     let render = quote! {
-        #idx => self.#v_snake.render(area, buf, state.clone()),
+        #idx => self.#v_ident.render(area, buf, state.clone()),
     };
 
     let display = quote! {
@@ -127,13 +125,12 @@ fn extract_named(
 
 fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantInfo {
     let v_ident = &variant.ident;
-    let v_snake = format_ident!("{}", v_ident.to_string().to_lowercase());
     let variant_label = v_ident.to_string();
 
     match variant.fields {
-        syn::Fields::Unit => extract_unit(name, v_ident, &v_snake, variant_label, idx),
+        syn::Fields::Unit => extract_unit(name, v_ident, variant_label, idx),
         syn::Fields::Named(fields_named) => {
-            extract_named(fields_named, name, v_ident, &v_snake, variant_label, idx)
+            extract_named(fields_named, name, v_ident, variant_label, idx)
         }
 
         _ => {
@@ -161,6 +158,7 @@ fn generate_enum_form(name: &syn::Ident, data_enum: syn::DataEnum) -> MyObject {
     MyObject::Enum(myenum)
 }
 
+/// Represents all the info needed to create a Form object
 enum MyObject{
     Enum(MyEnum),
     Struct(MyStruct),
