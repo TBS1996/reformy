@@ -392,7 +392,6 @@ struct FieldType {
 struct StructField {
     field: syn::Ident,
     field_ty: FieldType,
-    height: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
     render: proc_macro2::TokenStream,
 }
@@ -418,8 +417,20 @@ impl MyStruct {
         }
     }
 
+    fn height_exprs(&self) -> Vec<proc_macro2::TokenStream> {
+        self.fields.iter().map(|f| {
+            if f.field_ty.is_leaf {
+                quote!{ 1 }
+            } else {
+                //let height = quote! { self.#ident.form_height() };
+                let ident = f.field.clone();
+                quote! {self.#ident.form_height()}
+            }
+        }).collect()
+    }
+
     fn height(&self) -> proc_macro2::TokenStream {
-        let heights = self.fields.iter().map(|f| f.height.clone());
+        let heights = self.height_exprs();
         quote! {
             0 #( + #heights )*
         }
@@ -451,7 +462,7 @@ impl MyStruct {
                 quote! { pub #name: #ty }
             })
             .collect();
-        let height_exprs: Vec<_> = self.fields.iter().map(|i| i.height.clone()).collect();
+        let height_exprs: Vec<_> = self.height_exprs();
         let field_inits: Vec<_> = self
             .fields
             .iter()
@@ -563,7 +574,6 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         .unwrap();
 
         let to_fields = quote! { #ident: self.#ident.build()? };
-        let height = quote! { self.#ident.form_height() };
 
         let render = quote! {
             {
@@ -605,7 +615,6 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         StructField {
             field: ident.clone(),
             field_ty: FieldType { ty, is_leaf: false },
-            height,
             build: to_fields,
             render,
         }
@@ -633,11 +642,9 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
                 self.#ident.input.render(cols[1], buf);
             }
         };
-        let height = quote! { 1 };
         StructField {
             field: ident.clone(),
             field_ty: FieldType {ty: parse2(quote! {::reformy_core::Filtext::<#ty>}).unwrap(), is_leaf: true},
-            height,
             build: to_fields,
             render,
         }
