@@ -21,16 +21,11 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
 }
 
 fn extract_unit(
-    name: &syn::Ident,
     v_ident: &syn::Ident,
     variant_label: String,
     idx: usize,
 ) -> VariantInfo {
     let init = quote! { #v_ident: () };
-
-    let build = quote! {
-        #idx => Some(#name::#v_ident),
-    };
 
     let input = quote! {
         #idx => false,
@@ -49,7 +44,6 @@ fn extract_unit(
         v_ty: parse_str("()").unwrap(),
         height: 0,
         input,
-        build,
         init,
         render,
         titles: None,
@@ -86,10 +80,6 @@ fn extract_named(
         #v_ident: #form_struct_name::new()
     };
 
-    let build = quote! {
-        #idx => self.#v_ident.build(),
-    };
-
     let input = quote! {
         #idx => self.#v_ident.input(input.clone()),
     };
@@ -107,7 +97,6 @@ fn extract_named(
         v_ty: form_struct_name,
         height: field_count,
         input,
-        build,
         init,
         render,
         titles: Some(mystruct),
@@ -120,7 +109,7 @@ fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantIn
     let variant_label = v_ident.to_string();
 
     match variant.fields {
-        syn::Fields::Unit => extract_unit(name, v_ident, variant_label, idx),
+        syn::Fields::Unit => extract_unit(v_ident, variant_label, idx),
         syn::Fields::Named(fields_named) => {
             extract_named(fields_named, name, v_ident, variant_label, idx)
         }
@@ -252,8 +241,20 @@ impl MyEnum {
             .collect();
         let build_matches: Vec<_> = self
             .variants
-            .iter()
-            .map(|info| info.build.clone())
+            .iter().enumerate()
+            .map(|(idx, info)| {
+                let ident = &info.v_ident;
+                if info.titles.is_some() {
+                    quote! {
+                        #idx => self.#ident.build(),
+                    }
+                } else {
+                    let name = &self.name;
+                    quote! {
+                        #idx => Some(#name::#ident),
+                    }
+                }
+            })
             .collect();
         let variant_inits: Vec<_> = self.variants.iter().map(|info| info.init.clone()).collect();
         let render_matches: Vec<_> = self
@@ -378,9 +379,9 @@ struct VariantInfo {
     v_ty: syn::Type,
     height: usize,
     input: proc_macro2::TokenStream,
-    build: proc_macro2::TokenStream,
     init: proc_macro2::TokenStream,
     render: proc_macro2::TokenStream,
+    /// The fields if it's a data enum, none if it's unit
     titles: Option<MyStruct>,
     display: proc_macro2::TokenStream,
 }
