@@ -7,13 +7,15 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
 
-    match input.data {
+    let obj = match input.data {
         syn::Data::Enum(data_enum) => generate_enum_form(&name, data_enum),
         syn::Data::Struct(data_struct) => generate_struct_form(name, data_struct.fields),
-        _ => syn::Error::new_spanned(name, "Only structs and unit enums are supported")
+        _ => return syn::Error::new_spanned(name, "Only structs and unit enums are supported")
             .to_compile_error()
             .into(),
-    }
+    };
+
+    obj.generate().into()
 }
 
 fn extract_unit(
@@ -104,7 +106,7 @@ fn extract_named(
     };
 
     let render = quote! {
-        #idx => self.#v_snake.render(area, buf, &mut state.clone()),
+        #idx => self.#v_snake.render(area, buf, state.clone()),
     };
 
     let display = quote! {
@@ -145,7 +147,7 @@ fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantIn
     }
 }
 
-fn generate_enum_form(name: &syn::Ident, data_enum: syn::DataEnum) -> TokenStream {
+fn generate_enum_form(name: &syn::Ident, data_enum: syn::DataEnum) -> MyObject {
     let mut fields: Vec<VariantInfo> = vec![];
 
     for (idx, variant) in data_enum.variants.into_iter().enumerate() {
@@ -156,7 +158,65 @@ fn generate_enum_form(name: &syn::Ident, data_enum: syn::DataEnum) -> TokenStrea
         name: name.clone(),
         variants: fields,
     };
-    myenum.generate().into()
+    MyObject::Enum(myenum)
+}
+
+enum MyObject{
+    Enum(MyEnum),
+    Struct(MyStruct),
+}
+
+impl MyObject {
+    fn form_name(&self) -> syn::Ident {
+        match self {
+            MyObject::Enum(obj) => obj.form_name(),
+            MyObject::Struct(obj) => obj.form_name(),
+        }
+    }
+
+    fn name(&self) -> syn::Ident {
+        match self {
+            MyObject::Enum(obj) => obj.name.clone(),
+            MyObject::Struct(obj) => obj.name.clone(),
+        }
+    }
+
+    fn generate(&self) -> proc_macro2::TokenStream {
+     let stream = match self {
+        MyObject::Enum(ob) => ob.generate(),
+        MyObject::Struct(ob) => ob.generate(),
+    };
+
+    let name = self.name();
+    let form_name = self.form_name();
+
+
+    let widget: proc_macro2::TokenStream = quote! {
+        impl ratatui::widgets::WidgetRef for #form_name {
+            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+                ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
+            }
+        }
+
+        impl ratatui::widgets::StatefulWidgetRef for #form_name {
+            type State = bool;
+            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
+                self.render(area, buf, *state);
+            }
+        }
+
+        impl #name {
+            pub fn form() -> #form_name {
+                #form_name::new()
+            }
+        }
+    };
+
+    quote! { #stream
+    #widget}
+
+    
+    }
 }
 
 struct MyEnum {
@@ -305,24 +365,6 @@ impl MyEnum {
             }
         }
 
-        impl ratatui::widgets::WidgetRef for #form_name {
-            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
-                ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
-            }
-        }
-
-        impl ratatui::widgets::StatefulWidgetRef for #form_name {
-            type State = bool;
-            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
-                self.render(area, buf, *state);
-            }
-        }
-
-        impl #name {
-            pub fn form() -> #form_name {
-                #form_name::new()
-            }
-        }
     }.into()
     }
 }
@@ -469,7 +511,7 @@ impl MyStruct {
                     }
                 }
 
-                fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut bool) {
+                fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: bool) {
                     use ratatui::layout::{Layout, Direction, Constraint};
                     use ratatui::widgets::WidgetRef;
 
@@ -517,7 +559,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
                     ])
                     .split(chunk);
 
-                let label = if self.selected == #idx && *state {
+                let label = if self.selected == #idx && state {
                     ratatui::widgets::Paragraph::new(format!("> {}:", stringify!(#ident)))
                         .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
                 } else {
@@ -538,7 +580,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
                     &self.#ident,
                     cols[1],
                     buf,
-                    &mut (self.selected == #idx && *state),
+                    &mut (self.selected == #idx && state),
                 );
             }
         };
@@ -563,7 +605,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
                     ])
                     .split(chunk);
 
-                let label = if self.selected == #idx && *state {
+                let label = if self.selected == #idx && state {
                     ratatui::widgets::Paragraph::new(format!("> {}", stringify!(#ident)))
                         .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
                 } else {
@@ -585,49 +627,17 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
     }
 }
 
-fn generate_struct_form(name: syn::Ident, fields: syn::Fields) -> TokenStream {
+fn generate_struct_form(name: syn::Ident, fields: syn::Fields) -> MyObject {
     let named_fields = match fields {
         syn::Fields::Named(fields) => fields.named,
         _ => {
-            return syn::Error::new_spanned(name, "Only named fields supported")
-                .to_compile_error()
-                .into();
+            panic!("only named fields")
         }
     };
 
     let mystruct = MyStruct::new(name.clone(), None, named_fields.into_iter().collect());
 
-    let form_name = mystruct.form_name();
-
-    let other = mystruct.generate();
-
-    let widget: proc_macro2::TokenStream = quote! {
-        impl ratatui::widgets::WidgetRef for #form_name {
-            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
-                ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
-            }
-        }
-
-        impl ratatui::widgets::StatefulWidgetRef for #form_name {
-            type State = bool;
-
-            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
-                self.render(area, buf, state)
-            }
-        }
-
-        impl #name {
-            pub fn form() -> #form_name {
-                #form_name::new()
-            }
-        }
-    };
-
-    quote! {
-        #other
-        #widget
-    }
-    .into()
+    MyObject::Struct(mystruct)
 }
 
 fn is_nested_field(field: &Field) -> bool {
