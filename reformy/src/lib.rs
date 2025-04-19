@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
-use syn::{DeriveInput, Field, FieldsNamed, Variant, parse_macro_input};
+use syn::{parse2, parse_macro_input, parse_str, DeriveInput, Field, FieldsNamed, Variant};
 
 #[proc_macro_derive(FormRenderable, attributes(form))]
 pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
@@ -388,7 +388,7 @@ struct VariantInfo {
 /// A single field in a struct-like object.
 struct StructField {
     field: syn::Ident,
-    field_ty: proc_macro2::TokenStream,
+    field_ty: syn::Type,
     height: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
     render: proc_macro2::TokenStream,
@@ -546,8 +546,8 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
     let ty = &field.ty;
 
     if is_nested_field(field) {
-        let nested_form =
-            format_ident!("{}Form", ty.to_token_stream().to_string().replace(' ', ""));
+        let ty: syn::Type = parse_str(&format!("{}Form", ty.to_token_stream().to_string().replace(' ', ""))).unwrap();
+
 
         let to_fields = quote! { #ident: self.#ident.build()? };
         let height = quote! { self.#ident.form_height() };
@@ -591,7 +591,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
 
         StructField {
             field: ident.clone(),
-            field_ty: quote! { #nested_form },
+            field_ty: ty,
             height,
             build: to_fields,
             render,
@@ -623,7 +623,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         let height = quote! { 1 };
         StructField {
             field: ident.clone(),
-            field_ty: quote! { ::reformy_core::Filtext::<#ty> },
+            field_ty: parse2(quote!{::reformy_core::Filtext::<#ty>}).unwrap(),
             height,
             build: to_fields,
             render,
