@@ -33,17 +33,8 @@ fn extract_named(
 
     let mystruct = MyStruct::new(name.clone(), Some(v_ident.clone()), fields);
 
-    let field_idents: Vec<_> = fields_named
-        .named
-        .iter()
-        .map(|f| f.ident.as_ref().unwrap())
-        .collect();
-
-    let field_count = field_idents.len();
-
     VariantInfo {
         v_ident: v_ident.clone(),
-        height: field_count,
         titles: Some(mystruct),
     }
 }
@@ -54,7 +45,6 @@ fn extract_variant(name: &syn::Ident, variant: Variant) -> VariantInfo {
         syn::Fields::Unit => {
             VariantInfo {
                 v_ident: v_ident.clone(),
-                height: 0,
                 titles: None,
             }
         },
@@ -174,7 +164,7 @@ impl MyEnum {
             .variants
             .iter().enumerate()
             .map(|(idx, info)| {
-                let count = info.height;
+                let count = info.titles.as_ref().map(|x|x.height()).unwrap_or(quote!{0});
                
                 quote! {
                     #idx => #count,
@@ -220,13 +210,6 @@ impl MyEnum {
                 }
             })
             .collect();
-
-        /*
-        let init = quote! {
-            #v_ident: #form_struct_name::new()
-        };
-        */
-
         
         let variant_inits: Vec<_> = self.variants.iter().map(|info| {
             let ident = &info.v_ident;
@@ -384,7 +367,6 @@ impl MyEnum {
 /// A single variant in an enum
 struct VariantInfo {
     v_ident: syn::Ident,
-    height: usize,
     /// The fields if it's a data enum, none if it's unit
     titles: Option<MyStruct>,
 }
@@ -427,6 +409,13 @@ impl MyStruct {
             name,
             variant,
             fields: xfields,
+        }
+    }
+
+    fn height(&self) -> proc_macro2::TokenStream {
+        let heights = self.fields.iter().map(|f| f.height.clone());
+        quote! {
+            0 #( + #heights )*
         }
     }
 
