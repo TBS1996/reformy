@@ -136,7 +136,7 @@ impl UserForm {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut bool,
     ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
+        use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::widgets::WidgetRef;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -400,7 +400,7 @@ impl AddressForm {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut bool,
     ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
+        use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::widgets::WidgetRef;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -583,7 +583,7 @@ impl WhateverForm {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut bool,
     ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
+        use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::widgets::WidgetRef;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -725,7 +725,7 @@ impl RoleGuestForm {
         buf: &mut ratatui::buffer::Buffer,
         state: &mut bool,
     ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
+        use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::widgets::WidgetRef;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -869,8 +869,8 @@ impl RoleForm {
         buf: &mut ratatui::buffer::Buffer,
         state: bool,
     ) {
-        use ratatui::widgets::WidgetRef;
         use ratatui::prelude::Constraint;
+        use ratatui::widgets::WidgetRef;
         let label = match self.selected_variant {
             0usize => "Admin",
             1usize => "Guest",

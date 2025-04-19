@@ -9,9 +9,7 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
 
     match input.data {
         syn::Data::Enum(data_enum) => generate_enum_form(&name, data_enum),
-        syn::Data::Struct(data_struct) => {
-            generate_struct_form(name, data_struct.fields)
-        }
+        syn::Data::Struct(data_struct) => generate_struct_form(name, data_struct.fields),
         _ => syn::Error::new_spanned(name, "Only structs and unit enums are supported")
             .to_compile_error()
             .into(),
@@ -60,7 +58,6 @@ fn extract_unit(
     }
 }
 
-
 fn extract_named(
     fields_named: FieldsNamed,
     name: &syn::Ident,
@@ -69,7 +66,6 @@ fn extract_named(
     variant_label: String,
     idx: usize,
 ) -> VariantInfo {
-
     let mut fields: Vec<Field> = vec![];
 
     for field in fields_named.clone().named {
@@ -89,7 +85,6 @@ fn extract_named(
         .iter()
         .map(|f| f.ident.as_ref().unwrap())
         .collect();
-
 
     let field_count = field_idents.len();
     let heights = quote! {
@@ -150,19 +145,18 @@ fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantIn
     }
 }
 
-fn generate_enum_form(
-    name: &syn::Ident,
-    data_enum: syn::DataEnum,
-) -> TokenStream {
+fn generate_enum_form(name: &syn::Ident, data_enum: syn::DataEnum) -> TokenStream {
     let mut fields: Vec<VariantInfo> = vec![];
 
     for (idx, variant) in data_enum.variants.into_iter().enumerate() {
         fields.push(extract_variant(name, variant, idx));
     }
 
-    let myenum = MyEnum {name: name.clone(), variants: fields};
+    let myenum = MyEnum {
+        name: name.clone(),
+        variants: fields,
+    };
     myenum.generate().into()
-
 }
 
 struct MyEnum {
@@ -177,23 +171,53 @@ impl MyEnum {
 
     fn generate(&self) -> proc_macro2::TokenStream {
         let form_name = self.form_name();
-        
-    let variant_fields: Vec<_> = self.variants.iter().map(|info| info.field.clone()).collect();
-    let form_heights: Vec<_> = self.variants.iter().map(|info| info.height.clone()).collect();
-    let input_matches: Vec<_> = self.variants.iter().map(|info| {
-        info.input.clone()
-        
-    }).collect();
-    let build_matches: Vec<_> = self.variants.iter().map(|info| info.build.clone()).collect();
-    let variant_inits: Vec<_> = self.variants.iter().map(|info| info.init.clone()).collect();
-    let render_matches: Vec<_> = self.variants.iter().map(|info| info.render.clone()).collect();
-    let variant_titles: Vec<_> = self.variants.iter().map(|info| info.titles.as_ref().map(|mys|mys.generate()).unwrap_or_default()).collect();
-    let variant_display: Vec<_> = self.variants.iter().map(|info| info.display.clone()).collect();
 
-    let num_variants = variant_display.len();
-    let name = &self.name;
+        let variant_fields: Vec<_> = self
+            .variants
+            .iter()
+            .map(|info| info.field.clone())
+            .collect();
+        let form_heights: Vec<_> = self
+            .variants
+            .iter()
+            .map(|info| info.height.clone())
+            .collect();
+        let input_matches: Vec<_> = self
+            .variants
+            .iter()
+            .map(|info| info.input.clone())
+            .collect();
+        let build_matches: Vec<_> = self
+            .variants
+            .iter()
+            .map(|info| info.build.clone())
+            .collect();
+        let variant_inits: Vec<_> = self.variants.iter().map(|info| info.init.clone()).collect();
+        let render_matches: Vec<_> = self
+            .variants
+            .iter()
+            .map(|info| info.render.clone())
+            .collect();
+        let variant_titles: Vec<_> = self
+            .variants
+            .iter()
+            .map(|info| {
+                info.titles
+                    .as_ref()
+                    .map(|mys| mys.generate())
+                    .unwrap_or_default()
+            })
+            .collect();
+        let variant_display: Vec<_> = self
+            .variants
+            .iter()
+            .map(|info| info.display.clone())
+            .collect();
 
-    quote! {
+        let num_variants = variant_display.len();
+        let name = &self.name;
+
+        quote! {
         #(#variant_titles)*
 
         pub struct #form_name {
@@ -303,7 +327,6 @@ impl MyEnum {
     }
 }
 
-
 /// A single variant in an enum
 struct VariantInfo {
     field: proc_macro2::TokenStream,
@@ -316,7 +339,7 @@ struct VariantInfo {
     display: proc_macro2::TokenStream,
 }
 
-/// A single field in a struct-like object. 
+/// A single field in a struct-like object.
 struct StructField {
     field: syn::Ident,
     field_ty: proc_macro2::TokenStream,
@@ -333,58 +356,66 @@ struct MyStruct {
 
 impl MyStruct {
     fn new(name: syn::Ident, variant: Option<syn::Ident>, fields: Vec<Field>) -> Self {
+        let mut xfields: Vec<StructField> = vec![];
 
-    let mut xfields: Vec<StructField> = vec![];
+        for (idx, field) in fields.iter().enumerate() {
+            xfields.push(extract_field(idx, field));
+        }
 
-    for (idx, field) in fields.iter().enumerate() {
-        xfields.push(extract_field(idx, field));
-    }
-
-    Self {
-        name,
-        variant,
-        fields: xfields,
-    }
-        
+        Self {
+            name,
+            variant,
+            fields: xfields,
+        }
     }
 
     fn form_name(&self) -> syn::Ident {
         match &self.variant {
-            Some(var) => {format_ident!("{}{}Form", self.name, var)
-            },
+            Some(var) => {
+                format_ident!("{}{}Form", self.name, var)
+            }
             None => {
-                
-        format_ident!("{}Form", self.name)
-            },
+                format_ident!("{}Form", self.name)
+            }
         }
     }
 
     fn generate(&self) -> proc_macro2::TokenStream {
         if self.fields.is_empty() {
-            return quote!{}.into();
+            return quote! {}.into();
         }
 
-        let struct_fields: Vec<_> = self.fields.iter().map(|i| {
-            let name = i.field.clone();
-            let ty = i.field_ty.clone();
+        let struct_fields: Vec<_> = self
+            .fields
+            .iter()
+            .map(|i| {
+                let name = i.field.clone();
+                let ty = i.field_ty.clone();
 
-            quote! { pub #name: #ty }
-
-        }).collect();
+                quote! { pub #name: #ty }
+            })
+            .collect();
         let height_exprs: Vec<_> = self.fields.iter().map(|i| i.height.clone()).collect();
-        let field_inits: Vec<_> = self.fields.iter().map(|i| {
-            let field = i.field.clone();
-            let ty = i.field_ty.clone();
-            quote! { #field: #ty::new() }
-        }).collect();
+        let field_inits: Vec<_> = self
+            .fields
+            .iter()
+            .map(|i| {
+                let field = i.field.clone();
+                let ty = i.field_ty.clone();
+                quote! { #field: #ty::new() }
+            })
+            .collect();
         let to_struct_fields: Vec<_> = self.fields.iter().map(|i| i.build.clone()).collect();
-        let selected_matches: Vec<_> = self.fields.iter().enumerate().map(|(idx, i)| {
+        let selected_matches: Vec<_> = self
+            .fields
+            .iter()
+            .enumerate()
+            .map(|(idx, i)| {
+                let ident = i.field.clone();
 
-            let ident = i.field.clone();
-           
-        quote! { i if i == #idx => self.#ident.input(theinput.clone()), }
-        }
-        ).collect();
+                quote! { i if i == #idx => self.#ident.input(theinput.clone()), }
+            })
+            .collect();
         let render_calls: Vec<_> = self.fields.iter().map(|i| i.render.clone()).collect();
         let field_count = struct_fields.len();
         let name = &self.name;
@@ -395,7 +426,6 @@ impl MyStruct {
         } else {
             quote! { #name }
         };
-
 
         quote! {
             pub struct #form_name {
@@ -555,10 +585,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
     }
 }
 
-fn generate_struct_form(
-    name: syn::Ident,
-    fields: syn::Fields,
-) -> TokenStream {
+fn generate_struct_form(name: syn::Ident, fields: syn::Fields) -> TokenStream {
     let named_fields = match fields {
         syn::Fields::Named(fields) => fields.named,
         _ => {
@@ -567,8 +594,6 @@ fn generate_struct_form(
                 .into();
         }
     };
-
-    
 
     let mystruct = MyStruct::new(name.clone(), None, named_fields.into_iter().collect());
 
