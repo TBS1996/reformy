@@ -26,10 +26,6 @@ fn extract_unit(
     variant_label: String,
     idx: usize,
 ) -> VariantInfo {
-    let heights = quote! {
-        #idx => 0,
-    };
-
     let init = quote! { #v_ident: () };
 
     let build = quote! {
@@ -51,7 +47,7 @@ fn extract_unit(
     VariantInfo {
         v_ident: v_ident.clone(),
         v_ty: parse_str("()").unwrap(),
-        height: heights,
+        height: 0,
         input,
         build,
         init,
@@ -85,9 +81,6 @@ fn extract_named(
         .collect();
 
     let field_count = field_idents.len();
-    let heights = quote! {
-        #idx => #field_count,
-    };
 
     let init = quote! {
         #v_ident: #form_struct_name::new()
@@ -112,7 +105,7 @@ fn extract_named(
     VariantInfo {
         v_ident: v_ident.clone(),
         v_ty: form_struct_name,
-        height: heights,
+        height: field_count,
         input,
         build,
         init,
@@ -242,8 +235,15 @@ impl MyEnum {
             .collect();
         let form_heights: Vec<_> = self
             .variants
-            .iter()
-            .map(|info| info.height.clone())
+            .iter().enumerate()
+            .map(|(idx, info)| {
+                let count = info.height;
+               
+                quote! {
+                    #idx => #count,
+                }
+                
+            })
             .collect();
         let input_matches: Vec<_> = self
             .variants
@@ -376,7 +376,7 @@ impl MyEnum {
 struct VariantInfo {
     v_ident: syn::Ident,
     v_ty: syn::Type,
-    height: proc_macro2::TokenStream,
+    height: usize,
     input: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
     init: proc_macro2::TokenStream,
