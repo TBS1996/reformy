@@ -6,10 +6,9 @@ use syn::{DeriveInput, Field, FieldsNamed, Variant, parse_macro_input};
 pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
-    let form_name = format_ident!("{}Form", name);
 
     match input.data {
-        syn::Data::Enum(data_enum) => generate_enum_form(&name, &form_name, data_enum),
+        syn::Data::Enum(data_enum) => generate_enum_form(&name, data_enum),
         syn::Data::Struct(data_struct) => {
             generate_struct_form(name, data_struct.fields)
         }
@@ -153,7 +152,6 @@ fn extract_variant(name: &syn::Ident, variant: Variant, idx: usize) -> VariantIn
 
 fn generate_enum_form(
     name: &syn::Ident,
-    form_name: &syn::Ident,
     data_enum: syn::DataEnum,
 ) -> TokenStream {
     let mut fields: Vec<VariantInfo> = vec![];
@@ -162,16 +160,35 @@ fn generate_enum_form(
         fields.push(extract_variant(name, variant, idx));
     }
 
-    let variant_fields: Vec<_> = fields.iter().map(|info| info.field.clone()).collect();
-    let form_heights: Vec<_> = fields.iter().map(|info| info.height.clone()).collect();
-    let input_matches: Vec<_> = fields.iter().map(|info| info.input.clone()).collect();
-    let build_matches: Vec<_> = fields.iter().map(|info| info.build.clone()).collect();
-    let variant_inits: Vec<_> = fields.iter().map(|info| info.init.clone()).collect();
-    let render_matches: Vec<_> = fields.iter().map(|info| info.render.clone()).collect();
-    let variant_titles: Vec<_> = fields.iter().map(|info| info.titles.as_ref().map(|mys|mys.generate()).unwrap_or_default()).collect();
-    let variant_display: Vec<_> = fields.iter().map(|info| info.display.clone()).collect();
+    let myenum = MyEnum {name: name.clone(), variants: fields};
+    myenum.generate().into()
+
+}
+
+struct MyEnum {
+    name: syn::Ident,
+    variants: Vec<VariantInfo>,
+}
+
+impl MyEnum {
+    fn form_name(&self) -> syn::Ident {
+        format_ident!("{}Form", &self.name)
+    }
+
+    fn generate(&self) -> proc_macro2::TokenStream {
+        let form_name = self.form_name();
+        
+    let variant_fields: Vec<_> = self.variants.iter().map(|info| info.field.clone()).collect();
+    let form_heights: Vec<_> = self.variants.iter().map(|info| info.height.clone()).collect();
+    let input_matches: Vec<_> = self.variants.iter().map(|info| info.input.clone()).collect();
+    let build_matches: Vec<_> = self.variants.iter().map(|info| info.build.clone()).collect();
+    let variant_inits: Vec<_> = self.variants.iter().map(|info| info.init.clone()).collect();
+    let render_matches: Vec<_> = self.variants.iter().map(|info| info.render.clone()).collect();
+    let variant_titles: Vec<_> = self.variants.iter().map(|info| info.titles.as_ref().map(|mys|mys.generate()).unwrap_or_default()).collect();
+    let variant_display: Vec<_> = self.variants.iter().map(|info| info.display.clone()).collect();
 
     let num_variants = variant_display.len();
+    let name = &self.name;
 
     quote! {
         #(#variant_titles)*
@@ -280,12 +297,9 @@ fn generate_enum_form(
             }
         }
     }.into()
+    }
 }
 
-struct MyEnum {
-    name: syn::Ident,
-    variants: Vec<VariantInfo>,
-}
 
 /// A single variant in an enum
 struct VariantInfo {
