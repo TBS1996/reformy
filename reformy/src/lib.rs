@@ -20,20 +20,6 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     obj.generate().into()
 }
 
-fn extract_unit(
-    v_ident: &syn::Ident,
-) -> VariantInfo {
-    let init = quote! { #v_ident: () };
-
-    VariantInfo {
-        v_ident: v_ident.clone(),
-        v_ty: parse_str("()").unwrap(),
-        height: 0,
-        init,
-        titles: None,
-    }
-}
-
 fn extract_named(
     fields_named: FieldsNamed,
     name: &syn::Ident,
@@ -47,8 +33,6 @@ fn extract_named(
 
     let mystruct = MyStruct::new(name.clone(), Some(v_ident.clone()), fields);
 
-    let form_struct_name = mystruct.form_name();
-
     let field_idents: Vec<_> = fields_named
         .named
         .iter()
@@ -57,16 +41,9 @@ fn extract_named(
 
     let field_count = field_idents.len();
 
-    let init = quote! {
-        #v_ident: #form_struct_name::new()
-    };
-
-
     VariantInfo {
         v_ident: v_ident.clone(),
-        v_ty: form_struct_name,
         height: field_count,
-        init,
         titles: Some(mystruct),
     }
 }
@@ -74,7 +51,13 @@ fn extract_named(
 fn extract_variant(name: &syn::Ident, variant: Variant) -> VariantInfo {
     let v_ident = &variant.ident;
     match variant.fields {
-        syn::Fields::Unit => extract_unit(v_ident),
+        syn::Fields::Unit => {
+            VariantInfo {
+                v_ident: v_ident.clone(),
+                height: 0,
+                titles: None,
+            }
+        },
         syn::Fields::Named(fields_named) => {
             extract_named(fields_named, name, v_ident)
         }
@@ -182,7 +165,7 @@ impl MyEnum {
             .iter()
             .map(|info| {
                 let ident = &info.v_ident;
-                let ty = &info.v_ty;
+                let ty = &info.form_name();
 
                 quote! { pub #ident: #ty  }
             })
@@ -237,7 +220,32 @@ impl MyEnum {
                 }
             })
             .collect();
-        let variant_inits: Vec<_> = self.variants.iter().map(|info| info.init.clone()).collect();
+
+        /*
+        let init = quote! {
+            #v_ident: #form_struct_name::new()
+        };
+        */
+
+        
+        let variant_inits: Vec<_> = self.variants.iter().map(|info| {
+            let ident = &info.v_ident;
+            match &info.titles {
+                Some(s) => {
+                    let form = s.form_name();
+                    quote! {
+                        #ident: #form::new()
+                    }
+                },
+                None => {
+                    quote! {
+                        #ident: ()
+                    }
+                },
+            }
+
+            
+        }).collect();
         let render_matches: Vec<_> = self
             .variants
             .iter()
@@ -376,11 +384,20 @@ impl MyEnum {
 /// A single variant in an enum
 struct VariantInfo {
     v_ident: syn::Ident,
-    v_ty: syn::Type,
     height: usize,
-    init: proc_macro2::TokenStream,
     /// The fields if it's a data enum, none if it's unit
     titles: Option<MyStruct>,
+}
+
+impl VariantInfo {
+    fn form_name(&self) -> syn::Type {
+        match &self.titles {
+            Some(s) => s.form_name(),
+            None => {
+                parse_str("()").unwrap()
+            },
+        }
+    }
 }
 
 /// A single field in a struct-like object.
