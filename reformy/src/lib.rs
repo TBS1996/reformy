@@ -48,7 +48,7 @@ fn extract_unit(
 
     VariantInfo {
         v_ident: v_ident.clone(),
-        v_ty: quote!{()},
+        v_ty: None,
         height: heights,
         input,
         build,
@@ -109,7 +109,7 @@ fn extract_named(
 
     VariantInfo {
         v_ident: v_ident.clone(),
-        v_ty: quote! {#form_struct_name}, 
+        v_ty: Some(form_struct_name), 
         height: heights,
         input,
         build,
@@ -232,7 +232,11 @@ impl MyEnum {
             .iter()
             .map(|info| {
                 let ident = &info.v_ident;
-                let ty = &info.v_ty;
+                let ty = match &info.v_ty {
+                    Some(ty) => quote!{#ty},
+                    None => quote!{()},
+                };
+
                 quote! { pub #ident: #ty  }
             })
             .collect();
@@ -371,7 +375,7 @@ impl MyEnum {
 /// A single variant in an enum
 struct VariantInfo {
     v_ident: syn::Ident,
-    v_ty: proc_macro2::TokenStream,
+    v_ty: Option<syn::Ident>,
     height: proc_macro2::TokenStream,
     input: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
