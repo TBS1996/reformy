@@ -42,15 +42,11 @@ fn extract_named(
 fn extract_variant(name: &syn::Ident, variant: Variant) -> VariantInfo {
     let v_ident = &variant.ident;
     match variant.fields {
-        syn::Fields::Unit => {
-            VariantInfo {
-                v_ident: v_ident.clone(),
-                titles: None,
-            }
+        syn::Fields::Unit => VariantInfo {
+            v_ident: v_ident.clone(),
+            titles: None,
         },
-        syn::Fields::Named(fields_named) => {
-            extract_named(fields_named, name, v_ident)
-        }
+        syn::Fields::Named(fields_named) => extract_named(fields_named, name, v_ident),
 
         _ => {
             panic!()
@@ -162,17 +158,21 @@ impl MyEnum {
             .collect();
         let form_heights: Vec<_> = self
             .variants
-            .iter().enumerate()
+            .iter()
+            .enumerate()
             .map(|(idx, info)| {
-                let count = info.titles.as_ref().map(|x|x.height()).unwrap_or(quote!{0});
-               
+                let count = info
+                    .titles
+                    .as_ref()
+                    .map(|x| x.height(true))
+                    .unwrap_or(quote! {0});
+
                 quote! {
                     #idx => #count,
                 }
-                
             })
             .collect();
-        
+
         let input_matches: Vec<_> = self
             .variants
             .iter()
@@ -189,13 +189,12 @@ impl MyEnum {
                         #idx => false,
                     }
                 }
-
-                
             })
             .collect();
         let build_matches: Vec<_> = self
             .variants
-            .iter().enumerate()
+            .iter()
+            .enumerate()
             .map(|(idx, info)| {
                 let ident = &info.v_ident;
                 if info.titles.is_some() {
@@ -210,31 +209,32 @@ impl MyEnum {
                 }
             })
             .collect();
-        
-        let variant_inits: Vec<_> = self.variants.iter().map(|info| {
-            let ident = &info.v_ident;
-            match &info.titles {
-                Some(s) => {
-                    let form = s.form_name();
-                    quote! {
-                        #ident: #form::new()
-                    }
-                },
-                None => {
-                    quote! {
-                        #ident: ()
-                    }
-                },
-            }
 
-            
-        }).collect();
+        let variant_inits: Vec<_> = self
+            .variants
+            .iter()
+            .map(|info| {
+                let ident = &info.v_ident;
+                match &info.titles {
+                    Some(s) => {
+                        let form = s.form_name();
+                        quote! {
+                            #ident: #form::new()
+                        }
+                    }
+                    None => {
+                        quote! {
+                            #ident: ()
+                        }
+                    }
+                }
+            })
+            .collect();
         let render_matches: Vec<_> = self
             .variants
             .iter()
             .enumerate()
             .map(|(idx, info)| {
-                
                 let ident = &info.v_ident;
 
                 if info.titles.is_some() {
@@ -246,7 +246,6 @@ impl MyEnum {
                         #idx => {},
                     }
                 }
-                
             })
             .collect();
         let variant_titles: Vec<_> = self
@@ -375,9 +374,7 @@ impl VariantInfo {
     fn form_name(&self) -> syn::Type {
         match &self.titles {
             Some(s) => s.form_name(),
-            None => {
-                parse_str("()").unwrap()
-            },
+            None => parse_str("()").unwrap(),
         }
     }
 }
@@ -417,20 +414,26 @@ impl MyStruct {
         }
     }
 
-    fn height_exprs(&self) -> Vec<proc_macro2::TokenStream> {
-        self.fields.iter().map(|f| {
-            if f.field_ty.is_leaf {
-                quote!{ 1 }
-            } else {
-                //let height = quote! { self.#ident.form_height() };
-                let ident = f.field.clone();
-                quote! {self.#ident.form_height()}
-            }
-        }).collect()
+    fn height_exprs(&self, is_enum: bool) -> Vec<proc_macro2::TokenStream> {
+        self.fields
+            .iter()
+            .map(|f| {
+                if f.field_ty.is_leaf {
+                    quote! { 1 }
+                } else {
+                    //let height = quote! { self.#ident.form_height() };
+                    let ident = f.field.clone();
+                    match &self.variant {
+                        Some(var) if is_enum => quote! {self.#var.#ident.form_height()},
+                        _ => quote! {self.#ident.form_height()},
+                    }
+                }
+            })
+            .collect()
     }
 
-    fn height(&self) -> proc_macro2::TokenStream {
-        let heights = self.height_exprs();
+    fn height(&self, is_enum: bool) -> proc_macro2::TokenStream {
+        let heights = self.height_exprs(is_enum);
         quote! {
             0 #( + #heights )*
         }
@@ -462,7 +465,7 @@ impl MyStruct {
                 quote! { pub #name: #ty }
             })
             .collect();
-        let height_exprs: Vec<_> = self.height_exprs();
+        let height_exprs: Vec<_> = self.height_exprs(false);
         let field_inits: Vec<_> = self
             .fields
             .iter()
@@ -644,7 +647,10 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         };
         StructField {
             field: ident.clone(),
-            field_ty: FieldType {ty: parse2(quote! {::reformy_core::Filtext::<#ty>}).unwrap(), is_leaf: true},
+            field_ty: FieldType {
+                ty: parse2(quote! {::reformy_core::Filtext::<#ty>}).unwrap(),
+                is_leaf: true,
+            },
             build: to_fields,
             render,
         }

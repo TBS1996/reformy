@@ -49,6 +49,7 @@ struct Address {
 #[derive(Debug, Default, FormRenderable)]
 struct Whatever {
     foo: String,
+    bar: String,
 }
 
 #[derive(Debug, Default, FormRenderable)]
@@ -57,7 +58,8 @@ enum Role {
     Guest {
         name: String,
         cool: String,
-        whatever: String,
+        #[form(nested)]
+        whatever: Whatever,
     },
     #[default]
     User,
