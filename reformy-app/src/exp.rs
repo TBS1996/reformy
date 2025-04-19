@@ -3,10 +3,10 @@
 use std::prelude::rust_2024::*;
 #[macro_use]
 extern crate std;
-use std::{fmt::Display, str::FromStr};
 use crossterm::event::{self, Event};
 use ratatui::widgets::Widget;
 use reformy::FormRenderable;
+use std::{fmt::Display, str::FromStr};
 struct Email(String);
 #[automatically_derived]
 impl ::core::fmt::Debug for Email {
@@ -30,7 +30,11 @@ impl Display for Email {
 impl FromStr for Email {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.contains("@") { Ok(Email(s.to_string())) } else { Err(()) }
+        if s.contains("@") {
+            Ok(Email(s.to_string()))
+        } else {
+            Err(())
+        }
     }
 }
 use ratatui::widgets::StatefulWidgetRef;
@@ -123,34 +127,24 @@ impl UserForm {
             _ => false,
         }
     }
-    fn render(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: bool,
-    ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
+    fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: bool) {
+        use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::widgets::WidgetRef;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(
-                <[_]>::into_vec(
-                    #[rustc_box]
-                    ::alloc::boxed::Box::new([
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                        Constraint::Length(self.role.form_height()),
-                        Constraint::Length(1),
-                        Constraint::Length(self.address.form_height()),
-                    ]),
-                ),
-            )
+            .constraints(<[_]>::into_vec(
+                #[rustc_box]
+                ::alloc::boxed::Box::new([
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                    Constraint::Length(self.role.form_height()),
+                    Constraint::Length(1),
+                    Constraint::Length(self.address.form_height()),
+                ]),
+            ))
             .split(area);
         let title = ratatui::widgets::Paragraph::new("self.name".to_string() + ":")
-            .style(
-                ratatui::style::Style::default()
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            );
+            .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
         {
             let chunk = chunks[0usize];
             let cols = ratatui::layout::Layout::default()
@@ -160,19 +154,12 @@ impl UserForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 0usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "name"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 0usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}", "name"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
                 ratatui::widgets::Paragraph::new("name")
             };
@@ -188,17 +175,12 @@ impl UserForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 1usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(format_args!("> {0}", "age"));
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 1usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}", "age"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
                 ratatui::widgets::Paragraph::new("age")
             };
@@ -214,26 +196,17 @@ impl UserForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 2usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}:", "role"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 2usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}:", "role"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
-                ratatui::widgets::Paragraph::new(
-                    ::alloc::__export::must_use({
-                        let res = ::alloc::fmt::format(format_args!("{0}:", "role"));
-                        res
-                    }),
-                )
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("{0}:", "role"));
+                    res
+                }))
             };
             label.render_ref(cols[0], buf);
             let cols = ratatui::layout::Layout::default()
@@ -247,7 +220,7 @@ impl UserForm {
                 &self.role,
                 cols[1],
                 buf,
-                &mut (self.selected == 2usize && *state),
+                &mut (self.selected == 2usize && state),
             );
         }
         {
@@ -259,19 +232,12 @@ impl UserForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 3usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "email"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 3usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}", "email"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
                 ratatui::widgets::Paragraph::new("email")
             };
@@ -287,26 +253,17 @@ impl UserForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 4usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}:", "address"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 4usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}:", "address"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
-                ratatui::widgets::Paragraph::new(
-                    ::alloc::__export::must_use({
-                        let res = ::alloc::fmt::format(format_args!("{0}:", "address"));
-                        res
-                    }),
-                )
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("{0}:", "address"));
+                    res
+                }))
             };
             label.render_ref(cols[0], buf);
             let cols = ratatui::layout::Layout::default()
@@ -320,7 +277,7 @@ impl UserForm {
                 &self.address,
                 cols[1],
                 buf,
-                &mut (self.selected == 4usize && *state),
+                &mut (self.selected == 4usize && state),
             );
         }
     }
@@ -335,11 +292,7 @@ impl UserForm {
     }
 }
 impl ratatui::widgets::WidgetRef for UserForm {
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-    ) {
+    fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
     }
 }
@@ -433,32 +386,22 @@ impl AddressForm {
             _ => false,
         }
     }
-    fn render(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: bool,
-    ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
+    fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: bool) {
+        use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::widgets::WidgetRef;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(
-                <[_]>::into_vec(
-                    #[rustc_box]
-                    ::alloc::boxed::Box::new([
-                        Constraint::Length(self.whatever.form_height()),
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                    ]),
-                ),
-            )
+            .constraints(<[_]>::into_vec(
+                #[rustc_box]
+                ::alloc::boxed::Box::new([
+                    Constraint::Length(self.whatever.form_height()),
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                ]),
+            ))
             .split(area);
         let title = ratatui::widgets::Paragraph::new("self.name".to_string() + ":")
-            .style(
-                ratatui::style::Style::default()
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            );
+            .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
         {
             let chunk = chunks[0usize];
             let cols = ratatui::layout::Layout::default()
@@ -468,26 +411,17 @@ impl AddressForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 0usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}:", "whatever"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 0usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}:", "whatever"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
-                ratatui::widgets::Paragraph::new(
-                    ::alloc::__export::must_use({
-                        let res = ::alloc::fmt::format(format_args!("{0}:", "whatever"));
-                        res
-                    }),
-                )
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("{0}:", "whatever"));
+                    res
+                }))
             };
             label.render_ref(cols[0], buf);
             let cols = ratatui::layout::Layout::default()
@@ -501,7 +435,7 @@ impl AddressForm {
                 &self.whatever,
                 cols[1],
                 buf,
-                &mut (self.selected == 0usize && *state),
+                &mut (self.selected == 0usize && state),
             );
         }
         {
@@ -513,19 +447,12 @@ impl AddressForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 1usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "street"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 1usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}", "street"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
                 ratatui::widgets::Paragraph::new("street")
             };
@@ -541,19 +468,12 @@ impl AddressForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 2usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "number"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 2usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}", "number"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
                 ratatui::widgets::Paragraph::new("number")
             };
@@ -570,11 +490,7 @@ impl AddressForm {
     }
 }
 impl ratatui::widgets::WidgetRef for AddressForm {
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-    ) {
+    fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
     }
 }
@@ -601,12 +517,7 @@ struct Whatever {
 impl ::core::fmt::Debug for Whatever {
     #[inline]
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
-        ::core::fmt::Formatter::debug_struct_field1_finish(
-            f,
-            "Whatever",
-            "foo",
-            &&self.foo,
-        )
+        ::core::fmt::Formatter::debug_struct_field1_finish(f, "Whatever", "foo", &&self.foo)
     }
 }
 #[automatically_derived]
@@ -653,28 +564,18 @@ impl WhateverForm {
             _ => false,
         }
     }
-    fn render(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: bool,
-    ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
+    fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: bool) {
+        use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::widgets::WidgetRef;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(
-                <[_]>::into_vec(
-                    #[rustc_box]
-                    ::alloc::boxed::Box::new([Constraint::Length(1)]),
-                ),
-            )
+            .constraints(<[_]>::into_vec(
+                #[rustc_box]
+                ::alloc::boxed::Box::new([Constraint::Length(1)]),
+            ))
             .split(area);
         let title = ratatui::widgets::Paragraph::new("self.name".to_string() + ":")
-            .style(
-                ratatui::style::Style::default()
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            );
+            .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
         {
             let chunk = chunks[0usize];
             let cols = ratatui::layout::Layout::default()
@@ -684,17 +585,12 @@ impl WhateverForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 0usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(format_args!("> {0}", "foo"));
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 0usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}", "foo"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
                 ratatui::widgets::Paragraph::new("foo")
             };
@@ -703,15 +599,13 @@ impl WhateverForm {
         }
     }
     pub fn build(&self) -> Option<Whatever> {
-        Some(Whatever { foo: self.foo.value()? })
+        Some(Whatever {
+            foo: self.foo.value()?,
+        })
     }
 }
 impl ratatui::widgets::WidgetRef for WhateverForm {
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-    ) {
+    fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
         ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
     }
 }
@@ -733,7 +627,11 @@ impl Whatever {
 }
 enum Role {
     Admin,
-    Guest { name: String, cool: String, whatever: String },
+    Guest {
+        name: String,
+        cool: String,
+        whatever: String,
+    },
     #[default]
     User,
 }
@@ -743,18 +641,13 @@ impl ::core::fmt::Debug for Role {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         match self {
             Role::Admin => ::core::fmt::Formatter::write_str(f, "Admin"),
-            Role::Guest { name: __self_0, cool: __self_1, whatever: __self_2 } => {
-                ::core::fmt::Formatter::debug_struct_field3_finish(
-                    f,
-                    "Guest",
-                    "name",
-                    __self_0,
-                    "cool",
-                    __self_1,
-                    "whatever",
-                    &__self_2,
-                )
-            }
+            Role::Guest {
+                name: __self_0,
+                cool: __self_1,
+                whatever: __self_2,
+            } => ::core::fmt::Formatter::debug_struct_field3_finish(
+                f, "Guest", "name", __self_0, "cool", __self_1, "whatever", &__self_2,
+            ),
             Role::User => ::core::fmt::Formatter::write_str(f, "User"),
         }
     }
@@ -807,32 +700,22 @@ impl RoleGuestForm {
             _ => false,
         }
     }
-    fn render(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: bool,
-    ) {
-        use ratatui::layout::{Layout, Direction, Constraint};
+    fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: bool) {
+        use ratatui::layout::{Constraint, Direction, Layout};
         use ratatui::widgets::WidgetRef;
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(
-                <[_]>::into_vec(
-                    #[rustc_box]
-                    ::alloc::boxed::Box::new([
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                    ]),
-                ),
-            )
+            .constraints(<[_]>::into_vec(
+                #[rustc_box]
+                ::alloc::boxed::Box::new([
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                ]),
+            ))
             .split(area);
         let title = ratatui::widgets::Paragraph::new("self.name".to_string() + ":")
-            .style(
-                ratatui::style::Style::default()
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            );
+            .style(ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::BOLD));
         {
             let chunk = chunks[0usize];
             let cols = ratatui::layout::Layout::default()
@@ -842,19 +725,12 @@ impl RoleGuestForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 0usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "name"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 0usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}", "name"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
                 ratatui::widgets::Paragraph::new("name")
             };
@@ -870,19 +746,12 @@ impl RoleGuestForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 1usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "cool"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 1usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}", "cool"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
                 ratatui::widgets::Paragraph::new("cool")
             };
@@ -898,19 +767,12 @@ impl RoleGuestForm {
                     ratatui::layout::Constraint::Min(0),
                 ])
                 .split(chunk);
-            let label = if self.selected == 2usize && *state {
-                ratatui::widgets::Paragraph::new(
-                        ::alloc::__export::must_use({
-                            let res = ::alloc::fmt::format(
-                                format_args!("> {0}", "whatever"),
-                            );
-                            res
-                        }),
-                    )
-                    .style(
-                        ratatui::style::Style::default()
-                            .fg(ratatui::style::Color::Yellow),
-                    )
+            let label = if self.selected == 2usize && state {
+                ratatui::widgets::Paragraph::new(::alloc::__export::must_use({
+                    let res = ::alloc::fmt::format(format_args!("> {0}", "whatever"));
+                    res
+                }))
+                .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
             } else {
                 ratatui::widgets::Paragraph::new("whatever")
             };
@@ -924,143 +786,6 @@ impl RoleGuestForm {
             cool: self.cool.value()?,
             whatever: self.whatever.value()?,
         })
-    }
-}
-pub struct RoleForm {
-    pub selected_variant: usize,
-    pub admin: (),
-    pub guest: RoleGuestForm,
-    pub user: (),
-}
-impl RoleForm {
-    pub fn new() -> Self {
-        Self {
-            selected_variant: 0,
-            admin: (),
-            guest: RoleGuestForm::new(),
-            user: (),
-        }
-    }
-    pub fn form_height(&self) -> u16 {
-        let index = self.selected_variant;
-        (match index {
-            0usize => 0,
-            1usize => 3usize,
-            2usize => 0,
-            _ => 0,
-        } + 2) as u16
-    }
-    pub fn input(&mut self, input: tui_textarea::Input) -> bool {
-        let key = input.key.clone();
-        (match self.selected_variant {
-            0usize => false,
-            1usize => self.guest.input(input.clone()),
-            2usize => false,
-            _ => false,
-        }
-            || match key {
-                tui_textarea::Key::Left if self.selected_variant > 0 => {
-                    self.selected_variant -= 1;
-                    true
-                }
-                tui_textarea::Key::Right if self.selected_variant + 1 < 3usize => {
-                    self.selected_variant += 1;
-                    true
-                }
-                _ => false,
-            })
-    }
-    pub fn build(&self) -> Option<Role> {
-        match self.selected_variant {
-            0usize => Some(Role::Admin),
-            1usize => self.guest.build(),
-            2usize => Some(Role::User),
-            _ => None,
-        }
-    }
-    pub fn render(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: bool,
-    ) {
-        use ratatui::widgets::WidgetRef;
-        use ratatui::prelude::Constraint;
-        let label = match self.selected_variant {
-            0usize => "Admin",
-            1usize => "Guest",
-            2usize => "User",
-            _ => "???",
-        };
-        let title = if state {
-            ::alloc::__export::must_use({
-                let res = ::alloc::fmt::format(format_args!(">{0}: ", label));
-                res
-            })
-        } else {
-            ::alloc::__export::must_use({
-                let res = ::alloc::fmt::format(format_args!("{0}: ", label));
-                res
-            })
-        };
-        let chunks = ratatui::layout::Layout::default()
-            .direction(ratatui::layout::Direction::Vertical)
-            .constraints(
-                <[_]>::into_vec(
-                    #[rustc_box]
-                    ::alloc::boxed::Box::new([Constraint::Length(1), Constraint::Min(0)]),
-                ),
-            )
-            .split(area);
-        ratatui::widgets::Paragraph::new(
-                ::alloc::__export::must_use({
-                    let res = ::alloc::fmt::format(format_args!("[{0}]", label));
-                    res
-                }),
-            )
-            .render_ref(chunks[0], buf);
-        let area = chunks[1];
-        let chunks = ratatui::layout::Layout::default()
-            .direction(ratatui::layout::Direction::Horizontal)
-            .constraints(
-                <[_]>::into_vec(
-                    #[rustc_box]
-                    ::alloc::boxed::Box::new([Constraint::Length(2), Constraint::Min(0)]),
-                ),
-            )
-            .split(area);
-        let area = chunks[1];
-        match self.selected_variant {
-            0usize => {}
-            1usize => self.guest.render(area, buf, state.clone()),
-            2usize => {}
-            _ => {}
-        };
-    }
-}
-impl ratatui::widgets::WidgetRef for RoleForm {
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-    ) {
-        ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
-    }
-}
-impl ratatui::widgets::StatefulWidgetRef for RoleForm {
-    type State = bool;
-    fn render_ref(
-        &self,
-        area: ratatui::layout::Rect,
-        buf: &mut ratatui::buffer::Buffer,
-        state: &mut Self::State,
-    ) {
-        self.render(area, buf, *state);
-    }
-}
-impl Role {
-    pub fn form() -> RoleForm {
-        RoleForm::new()
     }
 }
 fn main() {
@@ -1089,16 +814,10 @@ fn main() {
     match foo.build() {
         tmp => {
             {
-                ::std::io::_eprint(
-                    format_args!(
-                        "[{0}:{1}:{2}] {3} = {4:#?}\n",
-                        "reformy-app/src/main.rs",
-                        92u32,
-                        5u32,
-                        "foo.build()",
-                        &tmp,
-                    ),
-                );
+                ::std::io::_eprint(format_args!(
+                    "[{0}:{1}:{2}] {3} = {4:#?}\n",
+                    "reformy-app/src/main.rs", 92u32, 5u32, "foo.build()", &tmp,
+                ));
             };
             tmp
         }

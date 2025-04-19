@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
-use syn::{parse2, parse_macro_input, parse_str, DeriveInput, Field, FieldsNamed, Variant};
+use syn::{DeriveInput, Field, FieldsNamed, Variant, parse_macro_input, parse_str, parse2};
 
 #[proc_macro_derive(FormRenderable, attributes(form))]
 pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
@@ -10,9 +10,11 @@ pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
     let obj = match input.data {
         syn::Data::Enum(data_enum) => generate_enum_form(&name, data_enum),
         syn::Data::Struct(data_struct) => generate_struct_form(name, data_struct.fields),
-        _ => return syn::Error::new_spanned(name, "Only structs and unit enums are supported")
-            .to_compile_error()
-            .into(),
+        _ => {
+            return syn::Error::new_spanned(name, "Only structs and unit enums are supported")
+                .to_compile_error()
+                .into();
+        }
     };
 
     obj.generate().into()
@@ -48,7 +50,7 @@ fn extract_unit(
 
     VariantInfo {
         v_ident: v_ident.clone(),
-        v_ty: None,
+        v_ty: parse_str("()").unwrap(),
         height: heights,
         input,
         build,
@@ -109,7 +111,7 @@ fn extract_named(
 
     VariantInfo {
         v_ident: v_ident.clone(),
-        v_ty: Some(form_struct_name), 
+        v_ty: form_struct_name,
         height: heights,
         input,
         build,
@@ -156,13 +158,13 @@ fn generate_enum_form(name: &syn::Ident, data_enum: syn::DataEnum) -> MyObject {
 }
 
 /// Represents all the info needed to create a Form object
-enum MyObject{
+enum MyObject {
     Enum(MyEnum),
     Struct(MyStruct),
 }
 
 impl MyObject {
-    fn form_name(&self) -> syn::Ident {
+    fn form_name(&self) -> syn::Type {
         match self {
             MyObject::Enum(obj) => obj.form_name(),
             MyObject::Struct(obj) => obj.form_name(),
@@ -177,40 +179,37 @@ impl MyObject {
     }
 
     fn generate(&self) -> proc_macro2::TokenStream {
-     let stream = match self {
-        MyObject::Enum(ob) => ob.generate(),
-        MyObject::Struct(ob) => ob.generate(),
-    };
+        let stream = match self {
+            MyObject::Enum(ob) => ob.generate(),
+            MyObject::Struct(ob) => ob.generate(),
+        };
 
-    let name = self.name();
-    let form_name = self.form_name();
+        let name = self.name();
+        let form_name = self.form_name();
 
-
-    let widget: proc_macro2::TokenStream = quote! {
-        impl ratatui::widgets::WidgetRef for #form_name {
-            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
-                ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
+        let widget: proc_macro2::TokenStream = quote! {
+            impl ratatui::widgets::WidgetRef for #form_name {
+                fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+                    ratatui::widgets::StatefulWidgetRef::render_ref(self, area, buf, &mut true)
+                }
             }
-        }
 
-        impl ratatui::widgets::StatefulWidgetRef for #form_name {
-            type State = bool;
-            fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
-                self.render(area, buf, *state);
+            impl ratatui::widgets::StatefulWidgetRef for #form_name {
+                type State = bool;
+                fn render_ref(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, state: &mut Self::State) {
+                    self.render(area, buf, *state);
+                }
             }
-        }
 
-        impl #name {
-            pub fn form() -> #form_name {
-                #form_name::new()
+            impl #name {
+                pub fn form() -> #form_name {
+                    #form_name::new()
+                }
             }
-        }
-    };
+        };
 
-    quote! { #stream
-    #widget}
-
-    
+        quote! { #stream
+        #widget}
     }
 }
 
@@ -220,8 +219,12 @@ struct MyEnum {
 }
 
 impl MyEnum {
-    fn form_name(&self) -> syn::Ident {
-        format_ident!("{}Form", &self.name)
+    fn form_name(&self) -> syn::Type {
+        let ident = format_ident!("{}Form", &self.name);
+        syn::Type::Path(syn::TypePath {
+            qself: None,
+            path: ident.into(),
+        })
     }
 
     fn generate(&self) -> proc_macro2::TokenStream {
@@ -232,10 +235,7 @@ impl MyEnum {
             .iter()
             .map(|info| {
                 let ident = &info.v_ident;
-                let ty = match &info.v_ty {
-                    Some(ty) => quote!{#ty},
-                    None => quote!{()},
-                };
+                let ty = &info.v_ty;
 
                 quote! { pub #ident: #ty  }
             })
@@ -375,7 +375,7 @@ impl MyEnum {
 /// A single variant in an enum
 struct VariantInfo {
     v_ident: syn::Ident,
-    v_ty: Option<syn::Ident>,
+    v_ty: syn::Type,
     height: proc_macro2::TokenStream,
     input: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
@@ -415,15 +415,15 @@ impl MyStruct {
         }
     }
 
-    fn form_name(&self) -> syn::Ident {
-        match &self.variant {
-            Some(var) => {
-                format_ident!("{}{}Form", self.name, var)
-            }
-            None => {
-                format_ident!("{}Form", self.name)
-            }
-        }
+    fn form_name(&self) -> syn::Type {
+        let ident = match &self.variant {
+            Some(var) => format_ident!("{}{}Form", self.name, var),
+            None => format_ident!("{}Form", self.name),
+        };
+        syn::Type::Path(syn::TypePath {
+            qself: None,
+            path: ident.into(),
+        })
     }
 
     fn generate(&self) -> proc_macro2::TokenStream {
@@ -546,8 +546,11 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
     let ty = &field.ty;
 
     if is_nested_field(field) {
-        let ty: syn::Type = parse_str(&format!("{}Form", ty.to_token_stream().to_string().replace(' ', ""))).unwrap();
-
+        let ty: syn::Type = parse_str(&format!(
+            "{}Form",
+            ty.to_token_stream().to_string().replace(' ', "")
+        ))
+        .unwrap();
 
         let to_fields = quote! { #ident: self.#ident.build()? };
         let height = quote! { self.#ident.form_height() };
@@ -623,7 +626,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         let height = quote! { 1 };
         StructField {
             field: ident.clone(),
-            field_ty: parse2(quote!{::reformy_core::Filtext::<#ty>}).unwrap(),
+            field_ty: parse2(quote! {::reformy_core::Filtext::<#ty>}).unwrap(),
             height,
             build: to_fields,
             render,
