@@ -320,7 +320,6 @@ struct StructField {
     height: proc_macro2::TokenStream,
     input: proc_macro2::TokenStream,
     build: proc_macro2::TokenStream,
-    init: proc_macro2::TokenStream,
     render: proc_macro2::TokenStream,
 }
 
@@ -371,7 +370,11 @@ impl MyStruct {
 
         }).collect();
         let height_exprs: Vec<_> = self.fields.iter().map(|i| i.height.clone()).collect();
-        let field_inits: Vec<_> = self.fields.iter().map(|i| i.init.clone()).collect();
+        let field_inits: Vec<_> = self.fields.iter().map(|i| {
+            let field = i.field.clone();
+            let ty = i.field_ty.clone();
+            quote! { #field: #ty::new() }
+        }).collect();
         let to_struct_fields: Vec<_> = self.fields.iter().map(|i| i.build.clone()).collect();
         let selected_matches: Vec<_> = self.fields.iter().map(|i| i.input.clone()).collect();
         let render_calls: Vec<_> = self.fields.iter().map(|i| i.render.clone()).collect();
@@ -462,7 +465,6 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
         let nested_form =
             format_ident!("{}Form", ty.to_token_stream().to_string().replace(' ', ""));
 
-        let init = quote! { #ident: #nested_form::new() };
         let to_fields = quote! { #ident: self.#ident.build()? };
         let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
         let height = quote! { self.#ident.form_height() };
@@ -508,13 +510,11 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
             field: ident.clone(),
             field_ty: quote! { #nested_form },
             height,
-            init,
             build: to_fields,
             input,
             render,
         }
     } else {
-        let init = quote! { #ident: ::reformy_core::Filtext::new() };
         let to_fields = quote! { #ident: self.#ident.value()? };
         let input = quote! { i if i == #idx => self.#ident.input(theinput.clone()), };
         let render = quote! {
@@ -544,7 +544,6 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
             field: ident.clone(),
             field_ty: quote! { ::reformy_core::Filtext::<#ty> },
             height,
-            init,
             build: to_fields,
             input,
             render,
