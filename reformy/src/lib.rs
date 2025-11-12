@@ -2,6 +2,8 @@ use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use syn::{DeriveInput, Field, FieldsNamed, Variant, parse_macro_input, parse_str, parse2};
 use syn::{ItemFn, FnArg, Pat, PatType};
+use syn::punctuated::Punctuated;
+use syn::token::Comma;
 
 #[proc_macro_derive(FormRenderable, attributes(form))]
 pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
@@ -720,18 +722,306 @@ pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
     
-    let expanded = quote! {
-        // Keep the original function
-        #(#fn_attrs)*
-        #fn_vis #fn_sig {
-            #fn_block
+    let fn_output = &input.sig.output;
+    let has_params = !param_names.is_empty();
+    
+    let expanded = if has_params {
+        // Function has parameters - generate form
+        quote! {
+            // Keep the original function
+            #(#fn_attrs)*
+            #fn_vis #fn_sig {
+                #fn_block
+            }
+            
+            // Generate the Args struct with FormRenderable
+            #[derive(Debug, Default, ::reformy::FormRenderable)]
+            #fn_vis struct #struct_name {
+                #(pub #param_names: #param_types,)*
+            }
+            
+            impl #struct_name {
+                /// Execute the function with these arguments
+                pub fn execute(self) #fn_output {
+                    #fn_name(#(self.#param_names),*)
+                }
+                
+                pub const HAS_PARAMS: bool = true;
+            }
         }
-        
-        // Generate the Args struct with FormRenderable
-        // The FormRenderable derive will automatically create a form() method
-        #[derive(Debug, Default, ::reformy::FormRenderable)]
-        #fn_vis struct #struct_name {
-            #(pub #param_names: #param_types,)*
+    } else {
+        // Zero-arg function - no form needed
+        let form_name = format_ident!("{}Form", struct_name);
+        quote! {
+            // Keep the original function
+            #(#fn_attrs)*
+            #fn_vis #fn_sig {
+                #fn_block
+            }
+            
+            // Generate empty struct (no FormRenderable)
+            #[derive(Debug, Default)]
+            #fn_vis struct #struct_name;
+            
+            // Generate dummy form type (won't be used but needs to exist)
+            #[derive(Debug)]
+            #fn_vis struct #form_name;
+            
+            impl #form_name {
+                pub fn new() -> Self { Self }
+                
+                pub fn input(&mut self, _input: tui_textarea::Input) -> bool {
+                    false
+                }
+                
+                pub fn build(&self) -> Option<#struct_name> {
+                    Some(#struct_name::default())
+                }
+            }
+            
+            impl ratatui::widgets::StatefulWidgetRef for #form_name {
+                type State = bool;
+                fn render_ref(&self, _area: ratatui::layout::Rect, _buf: &mut ratatui::buffer::Buffer, _state: &mut Self::State) {
+                }
+            }
+            
+            impl #struct_name {
+                /// Execute the function with these arguments
+                pub fn execute(self) #fn_output {
+                    #fn_name()
+                }
+                
+                pub const HAS_PARAMS: bool = false;
+                
+                pub fn form() -> #form_name {
+                    #form_name::new()
+                }
+            }
+        }
+    };
+    
+    expanded.into()
+}
+
+/// Collection macro that generates a complete TUI for multiple commands
+#[proc_macro]
+pub fn reformy_commands(input: TokenStream) -> TokenStream {
+    let parser = Punctuated::<syn::Ident, Comma>::parse_terminated;
+    let commands = parse_macro_input!(input with parser);
+    
+    // Generate struct names for each command (snake_case -> PascalCase)
+    let struct_names: Vec<_> = commands.iter().map(|cmd| {
+        format_ident!("{}", snake_to_pascal(&cmd.to_string()))
+    }).collect();
+    
+    let form_names: Vec<_> = struct_names.iter().map(|name| {
+        format_ident!("{}Form", name)
+    }).collect();
+    
+    let command_names: Vec<_> = commands.iter().map(|cmd| cmd.to_string()).collect();
+    let num_commands = commands.len();
+    
+    // Generate indices for match arms
+    let indices: Vec<_> = (0..num_commands).collect();
+    
+    let expanded = quote! {
+        pub fn reformy_tui() -> Result<(), Box<dyn std::error::Error>> {
+            use ratatui::layout::{Layout, Direction, Constraint};
+            use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Widget, WidgetRef};
+            use ratatui::style::{Style, Color, Modifier};
+            use ratatui::text::Line;
+            
+            // Enum to hold any of the command forms
+            enum CommandFormState {
+                #(#struct_names(#form_names),)*
+            }
+            
+            impl CommandFormState {
+                fn input(&mut self, input: tui_textarea::Input) -> bool {
+                    match self {
+                        #(CommandFormState::#struct_names(form) => form.input(input),)*
+                    }
+                }
+                
+                fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+                    match self {
+                        #(CommandFormState::#struct_names(form) => {
+                            ratatui::widgets::StatefulWidgetRef::render_ref(form, area, buf, &mut true)
+                        },)*
+                    }
+                }
+            }
+            
+            // Application state
+            struct AppState {
+                selected_command: usize,
+                current_form: Option<CommandFormState>,
+                result: Option<String>,
+            }
+            
+            impl AppState {
+                fn new() -> Self {
+                    Self {
+                        selected_command: 0,
+                        current_form: None,
+                        result: None,
+                    }
+                }
+                
+                fn handle_input(&mut self, input: tui_textarea::Input) -> bool {
+                    use tui_textarea::Key;
+                    
+                    // If showing result, any key goes back to menu
+                    if self.result.is_some() {
+                        self.result = None;
+                        self.current_form = None;
+                        return true;
+                    }
+                    
+                    // If in form view
+                    if let Some(form) = &mut self.current_form {
+                        match input.key {
+                            Key::Esc => {
+                                self.current_form = None;
+                                return true;
+                            }
+                            Key::Enter => {
+                                // Try to execute the command
+                                let result = self.execute_current();
+                                if let Some(r) = result {
+                                    self.result = Some(r);
+                                }
+                                return true;
+                            }
+                            _ => {
+                                return form.input(input);
+                            }
+                        }
+                    }
+                    
+                    // Main menu navigation
+                    match input.key {
+                        Key::Down if self.selected_command < #num_commands - 1 => {
+                            self.selected_command += 1;
+                            true
+                        }
+                        Key::Up if self.selected_command > 0 => {
+                            self.selected_command -= 1;
+                            true
+                        }
+                        Key::Enter => {
+                            // Execute directly if zero-arg, otherwise show form
+                            match self.selected_command {
+                                #(#indices => {
+                                    if #struct_names::HAS_PARAMS {
+                                        // Has parameters, show form
+                                        self.current_form = Some(CommandFormState::#struct_names(#struct_names::form()));
+                                    } else {
+                                        // Zero-arg function, execute immediately
+                                        let args = #struct_names::default();
+                                        let result = args.execute();
+                                        self.result = Some(format!("{:?}", result));
+                                    }
+                                },)*
+                                _ => return false,
+                            }
+                            true
+                        }
+                        _ => false,
+                    }
+                }
+                
+                fn execute_current(&self) -> Option<String> {
+                    match &self.current_form {
+                        #(Some(CommandFormState::#struct_names(form)) => {
+                            form.build().map(|args| {
+                                let result = args.execute();
+                                format!("{:?}", result)
+                            })
+                        },)*
+                        None => None,
+                    }
+                }
+                
+                fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer) {
+                    // If showing result
+                    if let Some(result) = &self.result {
+                        let block = Block::default()
+                            .title("Result (press any key to continue)")
+                            .borders(Borders::ALL);
+                        let inner = block.inner(area);
+                        block.render(area, buf);
+                        
+                        Paragraph::new(result.as_str()).render(inner, buf);
+                        return;
+                    }
+                    
+                    // If in form view
+                    if let Some(form) = &self.current_form {
+                        let block = Block::default()
+                            .title("Enter Parameters (Enter to execute, Esc to cancel)")
+                            .borders(Borders::ALL);
+                        let inner = block.inner(area);
+                        block.render(area, buf);
+                        
+                        form.render(inner, buf);
+                        return;
+                    }
+                    
+                    // Main menu
+                    let block = Block::default()
+                        .title("Select Command (Enter to choose, Esc to quit)")
+                        .borders(Borders::ALL);
+                    let inner = block.inner(area);
+                    block.render(area, buf);
+                    
+                    let command_names = &[#(#command_names),*];
+                    let items: Vec<ListItem> = command_names
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, name)| {
+                            let style = if idx == self.selected_command {
+                                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default()
+                            };
+                            let prefix = if idx == self.selected_command { "> " } else { "  " };
+                            ListItem::new(Line::from(format!("{}{}", prefix, name))).style(style)
+                        })
+                        .collect();
+                    
+                    let list = List::new(items);
+                    list.render(inner, buf);
+                }
+            }
+            
+            // Run the TUI
+            let mut app = AppState::new();
+            let mut terminal = ratatui::init();
+            
+            loop {
+                terminal.draw(|f| {
+                    app.render(f.area(), f.buffer_mut());
+                })?;
+                
+                if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
+                    match key.code {
+                        crossterm::event::KeyCode::Esc if app.current_form.is_none() && app.result.is_none() => break,
+                        key_code => {
+                            let input = tui_textarea::Input {
+                                key: key_code.into(),
+                                ctrl: key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL),
+                                alt: key.modifiers.contains(crossterm::event::KeyModifiers::ALT),
+                                shift: key.modifiers.contains(crossterm::event::KeyModifiers::SHIFT),
+                            };
+                            app.handle_input(input);
+                        }
+                    }
+                }
+            }
+            
+            ratatui::restore();
+            Ok(())
         }
     };
     
