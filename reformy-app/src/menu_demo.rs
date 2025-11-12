@@ -1,5 +1,5 @@
 use std::{fmt::Display, str::FromStr};
-use reformy::{reformy_cmd, reformy_commands};
+use reformy::{reformy_cmd, reformy_commands, FormRenderable};
 
 #[derive(Debug, Default)]
 struct Email(String);
@@ -49,6 +49,30 @@ fn get_timestamp() -> String {
     format!("Current time: {:?}", std::time::SystemTime::now())
 }
 
+// Complex nested struct example
+#[derive(Debug, Default, FormRenderable)]
+struct Person {
+    name: String,
+    age: usize,
+    email: Email,
+}
+
+#[derive(Debug, Default, FormRenderable)]
+struct Address {
+    street: String,
+    city: String,
+    zip_code: usize,
+}
+
+// Function that takes nested FormRenderable structs
+#[reformy_cmd]
+fn register_person(#[form(nested)] person: Person, #[form(nested)] address: Address) -> String {
+    format!(
+        "✓ Registered {} (age {}, email: {}) at {}, {} - {}",
+        person.name, person.age, person.email, address.street, address.city, address.zip_code
+    )
+}
+
 fn main() {
     // Generate and run the complete TUI
     reformy_commands! {
@@ -57,8 +81,7 @@ fn main() {
         calculate_sum,
         show_status,
         get_timestamp,
+        register_person,
     }
-    
-    reformy_tui().unwrap();
 }
 

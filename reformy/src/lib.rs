@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use syn::{DeriveInput, Field, FieldsNamed, Variant, parse_macro_input, parse_str, parse2};
-use syn::{ItemFn, FnArg, Pat, PatType};
+use syn::{ItemFn, FnArg, Pat};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 
@@ -696,6 +696,7 @@ fn snake_to_pascal(s: &str) -> String {
 }
 
 /// Attribute macro for generating forms from function parameters
+/// Supports #[form(nested)] on parameters for nested FormRenderable types
 #[proc_macro_attribute]
 pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
@@ -709,15 +710,23 @@ pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Generate struct name from function name (snake_case -> PascalCase)
     let struct_name = format_ident!("{}", snake_to_pascal(&fn_name.to_string()));
     
-    // Extract function parameters
+    // Extract function parameters with their attributes
     let mut param_names = Vec::new();
     let mut param_types = Vec::new();
+    let mut param_attrs = Vec::new();
+    let mut new_fn_inputs = Vec::new();
     
     for arg in &input.sig.inputs {
-        if let FnArg::Typed(PatType { pat, ty, .. }) = arg {
-            if let Pat::Ident(pat_ident) = &**pat {
+        if let FnArg::Typed(pat_type) = arg {
+            if let Pat::Ident(pat_ident) = &*pat_type.pat {
                 param_names.push(pat_ident.ident.clone());
-                param_types.push((*ty).clone());
+                param_types.push((*pat_type.ty).clone());
+                param_attrs.push(pat_type.attrs.clone());
+                
+                // Create cleaned function input without form attributes
+                let mut new_pat_type = pat_type.clone();
+                new_pat_type.attrs.retain(|attr| !attr.path().is_ident("form"));
+                new_fn_inputs.push(FnArg::Typed(new_pat_type));
             }
         }
     }
@@ -725,19 +734,27 @@ pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_output = &input.sig.output;
     let has_params = !param_names.is_empty();
     
+    let fn_generics = &input.sig.generics;
+    let fn_asyncness = &input.sig.asyncness;
+    let fn_unsafety = &input.sig.unsafety;
+    let fn_abi = &input.sig.abi;
+    
     let expanded = if has_params {
         // Function has parameters - generate form
         quote! {
-            // Keep the original function
+            // Keep the original function (without form attributes on params)
             #(#fn_attrs)*
-            #fn_vis #fn_sig {
+            #fn_vis #fn_asyncness #fn_unsafety #fn_abi fn #fn_name #fn_generics(#(#new_fn_inputs),*) #fn_output {
                 #fn_block
             }
             
             // Generate the Args struct with FormRenderable
             #[derive(Debug, Default, ::reformy::FormRenderable)]
             #fn_vis struct #struct_name {
-                #(pub #param_names: #param_types,)*
+                #(
+                    #(#param_attrs)*
+                    pub #param_names: #param_types,
+                )*
             }
             
             impl #struct_name {
@@ -825,7 +842,7 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
     let indices: Vec<_> = (0..num_commands).collect();
     
     let expanded = quote! {
-        pub fn reformy_tui() -> Result<(), Box<dyn std::error::Error>> {
+        {
             use ratatui::layout::{Layout, Direction, Constraint};
             use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Widget, WidgetRef};
             use ratatui::style::{Style, Color, Modifier};
@@ -1002,9 +1019,9 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
             loop {
                 terminal.draw(|f| {
                     app.render(f.area(), f.buffer_mut());
-                })?;
+                }).unwrap();
                 
-                if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
+                if let crossterm::event::Event::Key(key) = crossterm::event::read().unwrap() {
                     match key.code {
                         crossterm::event::KeyCode::Esc if app.current_form.is_none() && app.result.is_none() => break,
                         key_code => {
@@ -1021,7 +1038,6 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
             }
             
             ratatui::restore();
-            Ok(())
         }
     };
     
