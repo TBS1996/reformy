@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use syn::{DeriveInput, Field, FieldsNamed, Variant, parse_macro_input, parse_str, parse2};
+use syn::{ItemFn, FnArg, Pat, PatType};
 
 #[proc_macro_derive(FormRenderable, attributes(form))]
 pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
@@ -642,7 +643,7 @@ fn extract_field(idx: usize, field: &Field) -> StructField {
                 };
 
                 label.render_ref(cols[0], buf);
-                self.#ident.input.render(cols[1], buf);
+                ratatui::widgets::Widget::render(self.#ident.input.widget(), cols[1], buf);
             }
         };
         StructField {
@@ -677,4 +678,62 @@ fn is_nested_field(field: &Field) -> bool {
                 .parse_args::<syn::Ident>()
                 .map_or(false, |i| i == "nested")
     })
+}
+
+/// Convert snake_case function name to PascalCase struct name
+fn snake_to_pascal(s: &str) -> String {
+    s.split('_')
+        .map(|word| {
+            let mut c = word.chars();
+            match c.next() {
+                None => String::new(),
+                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+            }
+        })
+        .collect()
+}
+
+/// Attribute macro for generating forms from function parameters
+#[proc_macro_attribute]
+pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemFn);
+    
+    let fn_name = &input.sig.ident;
+    let fn_vis = &input.vis;
+    let fn_attrs = &input.attrs;
+    let fn_sig = &input.sig;
+    let fn_block = &input.block;
+    
+    // Generate struct name from function name (snake_case -> PascalCase)
+    let struct_name = format_ident!("{}", snake_to_pascal(&fn_name.to_string()));
+    
+    // Extract function parameters
+    let mut param_names = Vec::new();
+    let mut param_types = Vec::new();
+    
+    for arg in &input.sig.inputs {
+        if let FnArg::Typed(PatType { pat, ty, .. }) = arg {
+            if let Pat::Ident(pat_ident) = &**pat {
+                param_names.push(pat_ident.ident.clone());
+                param_types.push((*ty).clone());
+            }
+        }
+    }
+    
+    let expanded = quote! {
+        // Keep the original function
+        #(#fn_attrs)*
+        #fn_vis #fn_sig {
+            #fn_block
+        }
+        
+        // Generate the Args struct with FormRenderable
+        // The FormRenderable derive will automatically create a form() method
+        #[derive(Debug, Default, ::reformy::FormRenderable)]
+        #fn_vis struct #struct_name {
+            #(pub #param_names: #param_types,)*
+        }
+    };
+    
+    expanded.into()
 }
