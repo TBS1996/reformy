@@ -2,8 +2,6 @@ use proc_macro::TokenStream;
 use quote::{ToTokens, format_ident, quote};
 use syn::{DeriveInput, Field, FieldsNamed, Variant, parse_macro_input, parse_str, parse2};
 use syn::{ItemFn, FnArg, Pat};
-use syn::punctuated::Punctuated;
-use syn::token::Comma;
 
 #[proc_macro_derive(FormRenderable, attributes(form))]
 pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
@@ -820,11 +818,73 @@ pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
     expanded.into()
 }
 
+// Menu item structure - either a command or a category with submenus
+#[derive(Clone)]
+enum MenuItem {
+    Command(syn::Ident),
+    Category {
+        name: String,
+        items: Vec<MenuItem>,
+    },
+}
+
+impl MenuItem {
+    fn collect_commands(&self, commands: &mut Vec<syn::Ident>) {
+        match self {
+            MenuItem::Command(ident) => commands.push(ident.clone()),
+            MenuItem::Category { items, .. } => {
+                for item in items {
+                    item.collect_commands(commands);
+                }
+            }
+        }
+    }
+}
+
+// Custom parser for menu items
+fn parse_menu_items(input: syn::parse::ParseStream) -> syn::Result<Vec<MenuItem>> {
+    let mut items = Vec::new();
+    
+    while !input.is_empty() {
+        // Try to parse a string literal (category)
+        if input.peek(syn::LitStr) {
+            let category_name: syn::LitStr = input.parse()?;
+            input.parse::<syn::Token![=>]>()?;
+            
+            let content;
+            syn::braced!(content in input);
+            let subitems = parse_menu_items(&content)?;
+            
+            items.push(MenuItem::Category {
+                name: category_name.value(),
+                items: subitems,
+            });
+        } else {
+            // Parse a command identifier
+            let ident: syn::Ident = input.parse()?;
+            items.push(MenuItem::Command(ident));
+        }
+        
+        // Optional trailing comma
+        if input.peek(syn::Token![,]) {
+            input.parse::<syn::Token![,]>()?;
+        }
+    }
+    
+    Ok(items)
+}
+
 /// Collection macro that generates a complete TUI for multiple commands
 #[proc_macro]
 pub fn reformy_commands(input: TokenStream) -> TokenStream {
-    let parser = Punctuated::<syn::Ident, Comma>::parse_terminated;
-    let commands = parse_macro_input!(input with parser);
+    // Parse menu items (flat or nested)
+    let menu_items = parse_macro_input!(input with parse_menu_items);
+    
+    // Collect all commands (flattened from any nesting level)
+    let mut commands = Vec::new();
+    for item in &menu_items {
+        item.collect_commands(&mut commands);
+    }
     
     // Generate struct names for each command (snake_case -> PascalCase)
     let struct_names: Vec<_> = commands.iter().map(|cmd| {
@@ -841,12 +901,50 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
     // Generate indices for match arms
     let indices: Vec<_> = (0..num_commands).collect();
     
+    // Generate the runtime menu structure
+    fn generate_menu_structure(items: &[MenuItem]) -> proc_macro2::TokenStream {
+        let mut item_tokens = Vec::new();
+        
+        for item in items {
+            let token = match item {
+                MenuItem::Command(ident) => {
+                    let name = ident.to_string();
+                    quote! { RuntimeMenuItem::Command(#name) }
+                }
+                MenuItem::Category { name, items: subitems } => {
+                    let subitems_tokens = generate_menu_structure(subitems);
+                    quote! {
+                        RuntimeMenuItem::Category {
+                            name: #name.to_string(),
+                            items: vec![#subitems_tokens],
+                        }
+                    }
+                }
+            };
+            item_tokens.push(token);
+        }
+        
+        quote! { #(#item_tokens),* }
+    }
+    
+    let menu_structure = generate_menu_structure(&menu_items);
+    
     let expanded = quote! {
         {
             use ratatui::layout::{Layout, Direction, Constraint};
             use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Widget, WidgetRef};
             use ratatui::style::{Style, Color, Modifier};
             use ratatui::text::Line;
+            
+            // Runtime menu structure
+            #[derive(Clone)]
+            enum RuntimeMenuItem {
+                Command(&'static str),
+                Category {
+                    name: String,
+                    items: Vec<RuntimeMenuItem>,
+                },
+            }
             
             // Enum to hold any of the command forms
             enum CommandFormState {
@@ -871,18 +969,54 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
             
             // Application state
             struct AppState {
-                selected_command: usize,
+                menu_items: Vec<RuntimeMenuItem>,
+                menu_path: Vec<usize>,  // Path through nested menus
+                selected_index: usize,   // Index in current menu level
                 current_form: Option<CommandFormState>,
                 result: Option<String>,
             }
             
             impl AppState {
-                fn new() -> Self {
+                fn new(menu_items: Vec<RuntimeMenuItem>) -> Self {
                     Self {
-                        selected_command: 0,
+                        menu_items,
+                        menu_path: Vec::new(),
+                        selected_index: 0,
                         current_form: None,
                         result: None,
                     }
+                }
+                
+                // Get current menu level based on path
+                fn current_menu(&self) -> &[RuntimeMenuItem] {
+                    let mut current = &self.menu_items[..];
+                    for &index in &self.menu_path {
+                        if let RuntimeMenuItem::Category { items, .. } = &current[index] {
+                            current = items;
+                        }
+                    }
+                    current
+                }
+                
+                // Get breadcrumb path
+                fn breadcrumb(&self) -> Vec<String> {
+                    let mut breadcrumb = Vec::new();
+                    let mut current = &self.menu_items[..];
+                    
+                    for &index in &self.menu_path {
+                        if let RuntimeMenuItem::Category { name, items } = &current[index] {
+                            breadcrumb.push(name.clone());
+                            current = items;
+                        }
+                    }
+                    
+                    breadcrumb
+                }
+                
+                // Find command name from any level
+                fn find_command_name(&self, cmd_name: &str) -> Option<usize> {
+                    let command_names = &[#(#command_names),*];
+                    command_names.iter().position(|&name| name == cmd_name)
                 }
                 
                 fn handle_input(&mut self, input: tui_textarea::Input) -> bool {
@@ -916,57 +1050,77 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
                         }
                     }
                     
-                    // Main menu navigation
+                    // Menu navigation
+                    let current_menu = self.current_menu();
+                    let menu_len = current_menu.len();
+                    
                     match input.key {
                         Key::Down | Key::Char('j') => {
-                            self.selected_command = if self.selected_command + 1 >= #num_commands {
+                            self.selected_index = if self.selected_index + 1 >= menu_len {
                                 0  // Wrap to top
                             } else {
-                                self.selected_command + 1
+                                self.selected_index + 1
                             };
                             true
                         }
                         Key::Up | Key::Char('k') => {
-                            self.selected_command = if self.selected_command == 0 {
-                                #num_commands - 1  // Wrap to bottom
+                            self.selected_index = if self.selected_index == 0 {
+                                menu_len - 1  // Wrap to bottom
                             } else {
-                                self.selected_command - 1
+                                self.selected_index - 1
                             };
                             true
                         }
                         Key::PageDown | Key::End => {
-                            self.selected_command = #num_commands - 1;  // Go to bottom
+                            self.selected_index = menu_len - 1;
                             true
                         }
                         Key::PageUp | Key::Home => {
-                            self.selected_command = 0;  // Go to top
+                            self.selected_index = 0;
                             true
                         }
                         Key::Char('G') => {
-                            self.selected_command = #num_commands - 1;  // Go to bottom (vim)
+                            self.selected_index = menu_len - 1;
                             true
                         }
                         Key::Char('g') => {
-                            self.selected_command = 0;  // Go to top (vim)
+                            self.selected_index = 0;
                             true
                         }
-                        Key::Enter => {
-                            // Execute directly if zero-arg, otherwise show form
-                            match self.selected_command {
-                                #(#indices => {
-                                    if #struct_names::HAS_PARAMS {
-                                        // Has parameters, show form
-                                        self.current_form = Some(CommandFormState::#struct_names(#struct_names::form()));
-                                    } else {
-                                        // Zero-arg function, execute immediately
-                                        let args = #struct_names::default();
-                                        let result = args.execute();
-                                        self.result = Some(format!("{:?}", result));
-                                    }
-                                },)*
-                                _ => return false,
-                            }
+                        Key::Backspace | Key::Char('h') if !self.menu_path.is_empty() => {
+                            // Go back up one level
+                            self.menu_path.pop();
+                            self.selected_index = 0;
                             true
+                        }
+                        Key::Enter | Key::Char('l') => {
+                            // Enter category or execute command
+                            match &current_menu[self.selected_index] {
+                                RuntimeMenuItem::Category { .. } => {
+                                    // Enter this category
+                                    self.menu_path.push(self.selected_index);
+                                    self.selected_index = 0;
+                                    true
+                                }
+                                RuntimeMenuItem::Command(cmd_name) => {
+                                    // Execute this command
+                                    if let Some(cmd_idx) = self.find_command_name(cmd_name) {
+                                        match cmd_idx {
+                                            #(#indices => {
+                                                if #struct_names::HAS_PARAMS {
+                                                    self.current_form = Some(CommandFormState::#struct_names(#struct_names::form()));
+                                                } else {
+                                                    let args = #struct_names::default();
+                                                    let result = args.execute();
+                                                    self.result = Some(format!("{:?}", result));
+                                                }
+                                            },)*
+                                            _ => return false,
+                                        }
+                                    }
+                                    true
+                                }
+                            }
                         }
                         _ => false,
                     }
@@ -1009,25 +1163,47 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
                         return;
                     }
                     
-                    // Main menu
+                    // Build breadcrumb and title
+                    let breadcrumb = self.breadcrumb();
+                    let breadcrumb_str = if breadcrumb.is_empty() {
+                        "Commands".to_string()
+                    } else {
+                        format!("{} >", breadcrumb.join(" > "))
+                    };
+                    
+                    let title = if self.menu_path.is_empty() {
+                        format!("{} (Enter/l: select, Esc: quit, h: back)", breadcrumb_str)
+                    } else {
+                        format!("{} (Enter/l: select, h/Backspace: back)", breadcrumb_str)
+                    };
+                    
                     let block = Block::default()
-                        .title("Select Command (Enter to choose, Esc to quit)")
+                        .title(title)
                         .borders(Borders::ALL);
                     let inner = block.inner(area);
                     block.render(area, buf);
                     
-                    let command_names = &[#(#command_names),*];
-                    let items: Vec<ListItem> = command_names
+                    // Get current menu items
+                    let current_menu = self.current_menu();
+                    let items: Vec<ListItem> = current_menu
                         .iter()
                         .enumerate()
-                        .map(|(idx, name)| {
-                            let style = if idx == self.selected_command {
+                        .map(|(idx, item)| {
+                            let (name, is_category) = match item {
+                                RuntimeMenuItem::Command(name) => (*name, false),
+                                RuntimeMenuItem::Category { name, .. } => (name.as_str(), true),
+                            };
+                            
+                            let style = if idx == self.selected_index {
                                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                             } else {
                                 Style::default()
                             };
-                            let prefix = if idx == self.selected_command { "> " } else { "  " };
-                            ListItem::new(Line::from(format!("{}{}", prefix, name))).style(style)
+                            
+                            let prefix = if idx == self.selected_index { "> " } else { "  " };
+                            let suffix = if is_category { " →" } else { "" };
+                            
+                            ListItem::new(Line::from(format!("{}{}{}", prefix, name, suffix))).style(style)
                         })
                         .collect();
                     
@@ -1036,8 +1212,11 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
                 }
             }
             
+            // Build menu structure
+            let menu_items = vec![#menu_structure];
+            
             // Run the TUI
-            let mut app = AppState::new();
+            let mut app = AppState::new(menu_items);
             let mut terminal = ratatui::init();
             
             loop {
@@ -1047,7 +1226,7 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
                 
                 if let crossterm::event::Event::Key(key) = crossterm::event::read().unwrap() {
                     match key.code {
-                        crossterm::event::KeyCode::Esc if app.current_form.is_none() && app.result.is_none() => break,
+                        crossterm::event::KeyCode::Esc if app.current_form.is_none() && app.result.is_none() && app.menu_path.is_empty() => break,
                         key_code => {
                             let input = tui_textarea::Input {
                                 key: key_code.into(),

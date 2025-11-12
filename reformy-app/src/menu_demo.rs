@@ -74,14 +74,25 @@ fn register_person(#[form(nested)] person: Person, #[form(nested)] address: Addr
 }
 
 fn main() {
-    // Generate and run the complete TUI
+    // Generate and run the complete TUI with nested menus!
     reformy_commands! {
-        create_user,
-        greet_person,
-        calculate_sum,
+        // Flat commands at root level
         show_status,
         get_timestamp,
-        register_person,
+        
+        // Nested categories
+        "User Management" => {
+            create_user,
+            register_person,
+        },
+        
+        "Math Operations" => {
+            calculate_sum,
+        },
+        
+        "Greetings" => {
+            greet_person,
+        },
     }
 }
 
