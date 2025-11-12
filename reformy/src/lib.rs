@@ -918,12 +918,36 @@ pub fn reformy_commands(input: TokenStream) -> TokenStream {
                     
                     // Main menu navigation
                     match input.key {
-                        Key::Down if self.selected_command < #num_commands - 1 => {
-                            self.selected_command += 1;
+                        Key::Down | Key::Char('j') => {
+                            self.selected_command = if self.selected_command + 1 >= #num_commands {
+                                0  // Wrap to top
+                            } else {
+                                self.selected_command + 1
+                            };
                             true
                         }
-                        Key::Up if self.selected_command > 0 => {
-                            self.selected_command -= 1;
+                        Key::Up | Key::Char('k') => {
+                            self.selected_command = if self.selected_command == 0 {
+                                #num_commands - 1  // Wrap to bottom
+                            } else {
+                                self.selected_command - 1
+                            };
+                            true
+                        }
+                        Key::PageDown | Key::End => {
+                            self.selected_command = #num_commands - 1;  // Go to bottom
+                            true
+                        }
+                        Key::PageUp | Key::Home => {
+                            self.selected_command = 0;  // Go to top
+                            true
+                        }
+                        Key::Char('G') => {
+                            self.selected_command = #num_commands - 1;  // Go to bottom (vim)
+                            true
+                        }
+                        Key::Char('g') => {
+                            self.selected_command = 0;  // Go to top (vim)
                             true
                         }
                         Key::Enter => {
