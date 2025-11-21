@@ -890,7 +890,7 @@ fn parse_menu_items(input: syn::parse::ParseStream) -> syn::Result<Vec<MenuItem>
 
 /// Collection macro that generates a complete TUI for multiple commands
 #[proc_macro]
-pub fn reformy_commands(input: TokenStream) -> TokenStream {
+pub fn menu(input: TokenStream) -> TokenStream {
     // Parse menu items (flat or nested)
     let menu_items = parse_macro_input!(input with parse_menu_items);
     

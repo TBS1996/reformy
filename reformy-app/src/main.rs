@@ -1,5 +1,5 @@
 use std::{fmt::Display, str::FromStr};
-use reformy::{form, reformy_commands, Form};
+use reformy::{form, menu, Form};
 
 #[derive(Debug, Default)]
 struct Email(String);
@@ -82,7 +82,7 @@ fn register_person(#[form] person: Person, #[form] address: Address) -> String {
 }
 
 fn main() {
-    reformy_commands! {
+    menu! {
         show_status,
         get_timestamp,
         
