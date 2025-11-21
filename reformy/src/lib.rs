@@ -1,12 +1,9 @@
-// Re-export all proc macros from reformy-derive
-pub use reformy_derive::{FormRenderable, reformy_cmd, reformy_commands};
+pub use reformy_derive::{Form, reformy_cmd, reformy_commands};
 
-// Re-export external dependencies so users only need to depend on reformy
 pub use ratatui;
 pub use crossterm;
 pub use tui_textarea;
 
-// Runtime types for the forms
 use std::{fmt::Display, marker::PhantomData, str::FromStr};
 use ratatui::style::Style;
 use tui_textarea::{Input, TextArea};

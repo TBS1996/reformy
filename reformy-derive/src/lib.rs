@@ -3,8 +3,8 @@ use quote::{ToTokens, format_ident, quote};
 use syn::{DeriveInput, Field, FieldsNamed, Variant, parse_macro_input, parse_str, parse2};
 use syn::{ItemFn, FnArg, Pat};
 
-#[proc_macro_derive(FormRenderable, attributes(form))]
-pub fn derive_form_renderable(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Form, attributes(form))]
+pub fn derive_form(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
 
@@ -711,7 +711,7 @@ fn snake_to_pascal(s: &str) -> String {
 }
 
 /// Attribute macro for generating forms from function parameters
-/// Supports #[form(nested)] on parameters for nested FormRenderable types
+/// Supports #[form(nested)] on parameters for nested Form types
 #[proc_macro_attribute]
 pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
@@ -763,8 +763,8 @@ pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 #fn_block
             }
             
-            // Generate the Args struct with FormRenderable
-            #[derive(Debug, Default, ::reformy::FormRenderable)]
+            // Generate the Args struct with Form
+            #[derive(Debug, Default, ::reformy::Form)]
             #fn_vis struct #struct_name {
                 #(
                     #(#param_attrs)*
@@ -791,7 +791,7 @@ pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 #fn_block
             }
             
-            // Generate empty struct (no FormRenderable)
+            // Generate empty struct (no Form derive)
             #[derive(Debug, Default)]
             #fn_vis struct #struct_name;
             

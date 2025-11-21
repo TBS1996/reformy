@@ -1,8 +1,5 @@
 use std::{fmt::Display, str::FromStr};
-
-use reformy::{FormRenderable, crossterm, ratatui, tui_textarea};
-use crossterm::event::{self, Event};
-use ratatui::widgets::Widget;
+use reformy::{reformy_cmd, reformy_commands, Form};
 
 #[derive(Debug, Default)]
 struct Email(String);
@@ -25,69 +22,82 @@ impl FromStr for Email {
     }
 }
 
-#[derive(Debug, Default, FormRenderable)]
-struct User {
-    name: String,
-    age: usize,
-    #[form(nested)]
-    role: Role,
-    email: Email,
-    #[form(nested)]
-    address: Address,
-}
-
-#[derive(Debug, Default, FormRenderable)]
-struct Address {
-    #[form(nested)]
-    whatever: Whatever,
-    street: String,
-    number: usize,
-}
-
-#[derive(Debug, Default, FormRenderable)]
-struct Whatever {
-    foo: String,
-    bar: String,
-}
-
-#[derive(Debug, Default, FormRenderable)]
+#[derive(Debug, Default, Form)]
 enum Role {
-    Admin,
-    Guest {
-        name: String,
-        cool: String,
-        #[form(nested)]
-        whatever: Whatever,
+    Admin{
+        password: String,
     },
     #[default]
     User,
 }
 
-fn main() {
-    let mut foo = User::form();
-    let mut terminal = ratatui::init();
-
-    loop {
-        terminal
-            .draw(|f| {
-                f.render_widget(&foo, f.area());
-            })
-            .unwrap();
-
-        if let Event::Key(key) = event::read().unwrap() {
-            match key.code {
-                event::KeyCode::Esc => break,
-                key => {
-                    let input = tui_textarea::Input {
-                        key: key.into(),
-                        ..Default::default()
-                    };
-                    foo.input(input);
-                }
-            }
-        }
-    }
-
-    ratatui::restore();
-    dbg!(foo.build());
+#[reformy_cmd]
+fn create_user(name: String, age: usize, email: Email) -> String {
+    format!("✓ Created user: {} (age: {}, email: {})", name, age, email)
 }
+
+#[reformy_cmd]
+fn greet_person(first_name: String, last_name: String) -> String {
+    format!("Hello, {} {}! Welcome to reformy!", first_name, last_name)
+}
+
+#[reformy_cmd]
+fn calculate_sum(a: usize, b: usize) -> usize {
+    a + b
+}
+
+
+#[reformy_cmd]
+fn show_status() -> String {
+    "System is running normally ✓".to_string()
+}
+
+#[reformy_cmd]
+fn get_timestamp() -> String {
+    format!("Current time: {:?}", std::time::SystemTime::now())
+}
+
+#[derive(Debug, Default, Form)]
+struct Person {
+    name: String,
+    age: usize,
+    #[form(nested)]
+    role: Role,
+    email: Email,
+}
+
+#[derive(Debug, Default, Form)]
+struct Address {
+    street: String,
+    city: String,
+    zip_code: usize,
+}
+
+#[reformy_cmd]
+fn register_person(#[form(nested)] person: Person, #[form(nested)] address: Address) -> String {
+    format!(
+        "✓ Registered {} (age {}, email: {}) at {}, {} - {}",
+        person.name, person.age, person.email, address.street, address.city, address.zip_code
+    )
+}
+
+fn main() {
+    reformy_commands! {
+        show_status,
+        get_timestamp,
+        
+        "User Management" => {
+            create_user,
+            register_person,
+        },
+        
+        "Math Operations" => {
+            calculate_sum,
+        },
+        
+        "Greetings" => {
+            greet_person,
+        },
+    }
+}
+

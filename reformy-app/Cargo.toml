@@ -5,22 +5,3 @@ edition = "2021"
 
 [dependencies]
 reformy = { path = "../reformy" }
-
-# Note: All dependencies (ratatui, crossterm, tui-textarea) are re-exported by reformy
-
-
-[[bin]]
-name = "main"
-path = "src/main.rs"
-
-[[bin]]
-name = "cmd_demo"
-path = "src/cmd_demo.rs"
-
-[[bin]]
-name = "menu_demo"
-path = "src/menu_demo.rs"
-
-# [[bin]]
-# name = "exp"
-# path = "src/exp.rs"
