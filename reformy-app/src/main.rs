@@ -61,7 +61,7 @@ fn get_timestamp() -> String {
 struct Person {
     name: String,
     age: usize,
-    #[form(nested)]
+    #[form]
     role: Role,
     email: Email,
 }
@@ -74,7 +74,7 @@ struct Address {
 }
 
 #[reformy_cmd]
-fn register_person(#[form(nested)] person: Person, #[form(nested)] address: Address) -> String {
+fn register_person(#[form] person: Person, #[form] address: Address) -> String {
     format!(
         "✓ Registered {} (age {}, email: {}) at {}, {} - {}",
         person.name, person.age, person.email, address.street, address.city, address.zip_code

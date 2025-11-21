@@ -681,9 +681,6 @@ fn generate_struct_form(name: syn::Ident, fields: syn::Fields) -> MyObject {
 fn is_nested_field(field: &Field) -> bool {
     field.attrs.iter().any(|attr| {
         attr.path().is_ident("form")
-            && attr
-                .parse_args::<syn::Ident>()
-                .map_or(false, |i| i == "nested")
     })
 }
 
@@ -711,7 +708,7 @@ fn snake_to_pascal(s: &str) -> String {
 }
 
 /// Attribute macro for generating forms from function parameters
-/// Supports #[form(nested)] on parameters for nested Form types
+/// Supports #[form] on parameters for nested Form types
 #[proc_macro_attribute]
 pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
