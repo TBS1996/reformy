@@ -1,0 +1,18 @@
+[package]
+name = "reformy-derive"
+version = "0.1.6"
+edition = "2024"
+description = "Proc macros for reformy - derive ratatui form widgets from structs or enums"
+license = "GPL-3.0-or-later"
+
+[lib]
+proc-macro = true
+
+
+[dependencies]
+crossterm.workspace = true
+ratatui.workspace = true
+quote.workspace = true
+syn.workspace = true
+proc-macro2.workspace = true
+tui-textarea.workspace = true

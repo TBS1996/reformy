@@ -1,6 +1,6 @@
 use std::{fmt::Display, str::FromStr};
+use reformy::{reformy_cmd, crossterm, ratatui, tui_textarea};
 use crossterm::event::{self, Event};
-use reformy::reformy_cmd;
 
 #[derive(Debug, Default)]
 struct Email(String);

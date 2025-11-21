@@ -1,8 +1,9 @@
 [workspace]
 members = [
     "reformy",
+    "reformy-derive",
     "reformy-app"
-, "reformy-core"]
+]
 
 [workspace.dependencies]
 crossterm = { version = "0.28.1" }

@@ -5,10 +5,8 @@ edition = "2021"
 
 [dependencies]
 reformy = { path = "../reformy" }
-reformy-core = { path = "../reformy-core" }
-ratatui.workspace = true
-crossterm.workspace = true
-tui-textarea.workspace = true
+
+# Note: All dependencies (ratatui, crossterm, tui-textarea) are re-exported by reformy
 
 
 [[bin]]

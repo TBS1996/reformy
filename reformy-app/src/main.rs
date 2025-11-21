@@ -1,8 +1,8 @@
 use std::{fmt::Display, str::FromStr};
 
+use reformy::{FormRenderable, crossterm, ratatui, tui_textarea};
 use crossterm::event::{self, Event};
 use ratatui::widgets::Widget;
-use reformy::FormRenderable;
 
 #[derive(Debug, Default)]
 struct Email(String);
@@ -24,8 +24,6 @@ impl FromStr for Email {
         }
     }
 }
-
-use ratatui::widgets::StatefulWidgetRef;
 
 #[derive(Debug, Default, FormRenderable)]
 struct User {

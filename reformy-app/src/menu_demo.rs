@@ -1,6 +1,8 @@
 use std::{fmt::Display, str::FromStr};
 use reformy::{reformy_cmd, reformy_commands, FormRenderable};
 
+// All necessary types (ratatui, crossterm, tui-textarea) are re-exported from reformy
+
 #[derive(Debug, Default)]
 struct Email(String);
 
@@ -22,7 +24,15 @@ impl FromStr for Email {
     }
 }
 
-// Define some example commands
+#[derive(Debug, Default, FormRenderable)]
+enum Role {
+    Admin{
+        password: String,
+    },
+    #[default]
+    User,
+}
+
 #[reformy_cmd]
 fn create_user(name: String, age: usize, email: Email) -> String {
     format!("✓ Created user: {} (age: {}, email: {})", name, age, email)
@@ -49,11 +59,12 @@ fn get_timestamp() -> String {
     format!("Current time: {:?}", std::time::SystemTime::now())
 }
 
-// Complex nested struct example
 #[derive(Debug, Default, FormRenderable)]
 struct Person {
     name: String,
     age: usize,
+    #[form(nested)]
+    role: Role,
     email: Email,
 }
 
@@ -64,7 +75,6 @@ struct Address {
     zip_code: usize,
 }
 
-// Function that takes nested FormRenderable structs
 #[reformy_cmd]
 fn register_person(#[form(nested)] person: Person, #[form(nested)] address: Address) -> String {
     format!(
@@ -74,13 +84,10 @@ fn register_person(#[form(nested)] person: Person, #[form(nested)] address: Addr
 }
 
 fn main() {
-    // Generate and run the complete TUI with nested menus!
     reformy_commands! {
-        // Flat commands at root level
         show_status,
         get_timestamp,
         
-        // Nested categories
         "User Management" => {
             create_user,
             register_person,
