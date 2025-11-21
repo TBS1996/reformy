@@ -1,4 +1,4 @@
-pub use reformy_derive::{Form, reformy_cmd, reformy_commands};
+pub use reformy_derive::{Form, form, reformy_commands};
 
 pub use ratatui;
 pub use crossterm;

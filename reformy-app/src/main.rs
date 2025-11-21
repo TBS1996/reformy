@@ -1,5 +1,5 @@
 use std::{fmt::Display, str::FromStr};
-use reformy::{reformy_cmd, reformy_commands, Form};
+use reformy::{form, reformy_commands, Form};
 
 #[derive(Debug, Default)]
 struct Email(String);
@@ -31,28 +31,28 @@ enum Role {
     User,
 }
 
-#[reformy_cmd]
+#[form]
 fn create_user(name: String, age: usize, email: Email) -> String {
     format!("✓ Created user: {} (age: {}, email: {})", name, age, email)
 }
 
-#[reformy_cmd]
+#[form]
 fn greet_person(first_name: String, last_name: String) -> String {
     format!("Hello, {} {}! Welcome to reformy!", first_name, last_name)
 }
 
-#[reformy_cmd]
+#[form]
 fn calculate_sum(a: usize, b: usize) -> usize {
     a + b
 }
 
 
-#[reformy_cmd]
+#[form]
 fn show_status() -> String {
     "System is running normally ✓".to_string()
 }
 
-#[reformy_cmd]
+#[form]
 fn get_timestamp() -> String {
     format!("Current time: {:?}", std::time::SystemTime::now())
 }
@@ -73,7 +73,7 @@ struct Address {
     zip_code: usize,
 }
 
-#[reformy_cmd]
+#[form]
 fn register_person(#[form] person: Person, #[form] address: Address) -> String {
     format!(
         "✓ Registered {} (age {}, email: {}) at {}, {} - {}",

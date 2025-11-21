@@ -710,7 +710,7 @@ fn snake_to_pascal(s: &str) -> String {
 /// Attribute macro for generating forms from function parameters
 /// Supports #[form] on parameters for nested Form types
 #[proc_macro_attribute]
-pub fn reformy_cmd(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn form(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     
     let fn_name = &input.sig.ident;
