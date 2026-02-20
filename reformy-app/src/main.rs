@@ -64,6 +64,7 @@ struct Person {
     #[form]
     role: Role,
     email: Email,
+    is_cool: bool,
 }
 
 #[derive(Debug, Default, Form)]
@@ -87,10 +88,14 @@ fn main() {
         get_timestamp,
         
         "User Management" => {
-            create_user,
-            register_person,
+            "Create User" => {
+                create_user,
+            },
+            "Register Person" => {
+                register_person,
+            },
         },
-        
+
         "Math Operations" => {
             calculate_sum,
         },
